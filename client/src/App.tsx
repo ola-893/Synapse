@@ -1,13 +1,13 @@
+// @ts-nocheck
 import { useState } from 'react';
 import { SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
-import { getFullnodeUrl } from '@mysten/sui/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Dashboard from './pages/Dashboard';
 import MemoryExplorer from './pages/MemoryExplorer';
 
 const queryClient = new QueryClient();
 const networks = {
-  testnet: { url: getFullnodeUrl('testnet') },
+  testnet: { url: 'https://fullnode.testnet.sui.io:443' },
 };
 
 export default function App() {

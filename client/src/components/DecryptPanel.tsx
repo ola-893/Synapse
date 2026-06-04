@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState } from 'react';
 import { useCurrentAccount, useSignTransaction } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';

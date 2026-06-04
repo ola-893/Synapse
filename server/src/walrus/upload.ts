@@ -10,7 +10,7 @@ export async function uploadToWalrus(blobData: Uint8Array, epochs: number = 1): 
   // Use the native HTTP REST API for Walrus upload via the publisher URL
   const response = await fetch(`${env.WALRUS_PUBLISHER_URL}/v1/blobs?epochs=${epochs}`, {
     method: 'PUT',
-    body: blobData,
+    body: Buffer.from(blobData),
   });
 
   if (!response.ok) {

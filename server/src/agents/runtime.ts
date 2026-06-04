@@ -16,11 +16,11 @@ async function executeAgentTick() {
 
   try {
     // 1. RECALL context before execution
-    const pastStrategies = await memwal.recall({
+    const pastStrategies: any = await memwal.recall({
       query: "What was the optimal x402 streaming rate for the target API yesterday, and were there any rate-limit failures?",
       topK: 5,
     });
-    console.log(`[Agent] Recalled ${pastStrategies.length} memories for context.`);
+    console.log(`[Agent] Recalled ${pastStrategies?.results?.length || 0} memories for context.`);
 
     // 2. MOCK: Encounter an API paywall
     const apiRequirements = { endpoint: 'https://api.market.data', cost: '0.005 SUI' };
