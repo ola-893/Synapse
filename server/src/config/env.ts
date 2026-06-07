@@ -6,7 +6,7 @@ dotenv.config({ path: '../.env' });
 const envSchema = z.object({
   // Sui
   SUI_NETWORK: z.enum(['mainnet', 'testnet', 'devnet', 'localnet']).default('testnet'),
-  SUI_PRIVATE_KEY: z.string().min(1),
+  SUI_PRIVATE_KEY: z.string().default(''),
 
   // MemWal
   MEMWAL_DELEGATE_KEY: z.string().default(''),

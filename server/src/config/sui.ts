@@ -31,6 +31,10 @@ export const sealClient = new SealClient({
 
 // Support both suiprivkey1... and raw hex formats
 export function initializeKeypair(privKey: string): Ed25519Keypair {
+  if (!privKey) {
+    console.warn('[Warning] No SUI_PRIVATE_KEY provided. Using ephemeral keypair for local testing.');
+    return new Ed25519Keypair();
+  }
   if (privKey.startsWith('suiprivkey1')) {
     const { secretKey } = decodeSuiPrivateKey(privKey);
     return Ed25519Keypair.fromSecretKey(secretKey);
