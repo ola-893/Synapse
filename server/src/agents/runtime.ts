@@ -8,6 +8,7 @@ import { purchaseDataset, ingestDataset } from '../marketplace/buyer.ts';
 let activeTask: cron.ScheduledTask | null = null;
 let lastTickTime: Date | null = null;
 let isRunning = false;
+let isRegistered = false;
 let tickCount = 0;
 
 /**
@@ -71,7 +72,16 @@ async function executeAgentTick() {
   }
 }
 
+export function registerAgent(config?: any) {
+  if (isRegistered) return;
+  console.log('Registering Synapse Agent...');
+  isRegistered = true;
+}
+
 export function startAgentLoop() {
+  if (!isRegistered) {
+    throw new Error('Agent must be registered before starting');
+  }
   if (isRunning) return;
   console.log('Starting Synapse Agent Runtime (2-minute intervals)...');
   
@@ -84,6 +94,9 @@ export function startAgentLoop() {
 }
 
 export function stopAgentLoop() {
+  if (!isRegistered) {
+    throw new Error('Agent must be registered before stopping');
+  }
   if (!isRunning || !activeTask) return;
   console.log('Stopping Synapse Agent Runtime...');
   activeTask.stop();
@@ -92,6 +105,7 @@ export function stopAgentLoop() {
 
 export function getAgentStatus() {
   return {
+    isRegistered,
     isRunning,
     lastTickTime,
     tickCount
