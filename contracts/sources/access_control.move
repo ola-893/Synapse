@@ -4,55 +4,34 @@ module synapse::access_control {
     use sui::transfer;
 
     /// Capability granting decryption rights to compliance operators
+    /// or platform admins. Used for platform-level management, not
+    /// individual marketplace purchases (which use PurchaseReceipt).
     public struct OperatorCap has key, store {
         id: UID,
     }
 
-    /// Capability granting decryption rights to AI agents
-    public struct AgentCap has key, store {
+    /// Admin capability for the access control module
+    public struct AdminCap has key, store {
         id: UID,
     }
 
-    /// Shared object representing the memory store policy
-    public struct MemoryVault has key {
-        id: UID,
-    }
-
-    /// Initialize the module and create a shared MemoryVault
+    /// Initialize the module and grant AdminCap to the deployer
     fun init(ctx: &mut TxContext) {
-        let vault = MemoryVault {
+        let admin_cap = AdminCap {
             id: object::new(ctx),
         };
-        transfer::share_object(vault);
+        transfer::public_transfer(admin_cap, tx_context::sender(ctx));
     }
 
-    /// Seal network calls this to verify the caller holds an OperatorCap
-    public entry fun seal_approve_memory(
-        _id: vector<u8>, 
-        _vault: &MemoryVault, 
-        _cap: &OperatorCap, 
-        _ctx: &TxContext
+    /// Mint an operator capability. Gated by AdminCap.
+    public fun mint_operator_cap(
+        _admin: &AdminCap,
+        recipient: address,
+        ctx: &mut TxContext
     ) {
-        // If the transaction successfully dry-runs to this point,
-        // the caller proved ownership of the OperatorCap.
-    }
-
-    /// Seal network calls this to verify the caller holds an AgentCap
-    public entry fun seal_approve_agent(
-        _id: vector<u8>, 
-        _vault: &MemoryVault, 
-        _cap: &AgentCap, 
-        _ctx: &TxContext
-    ) {
-        // Validates ownership of the AgentCap
-    }
-
-    /// Mint an operator capability. 
-    /// In production, this would be gated by an AdminCap.
-    public entry fun mint_operator_cap(ctx: &mut TxContext) {
         let cap = OperatorCap {
             id: object::new(ctx),
         };
-        transfer::public_transfer(cap, tx_context::sender(ctx));
+        transfer::public_transfer(cap, recipient);
     }
 }

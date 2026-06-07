@@ -3,7 +3,7 @@ module synapse::agent_registry {
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
     use std::string::String;
-    use synapse::access_control::{Self, AgentCap};
+    use synapse::access_control::AdminCap as AccessAdminCap;
 
     /// Represents an AI agent's identity on-chain
     public struct AgentProfile has key, store {
@@ -26,7 +26,7 @@ module synapse::agent_registry {
     }
 
     /// Register a new agent and issue it an AgentCap for decryption
-    public entry fun register_agent(
+    public fun register_agent(
         _admin: &AdminCap,
         name: String,
         delegate_address: address,
@@ -48,11 +48,17 @@ module synapse::agent_registry {
     }
 
     /// Deactivate a rogue or retired agent
-    public entry fun deactivate_agent(
+    public fun deactivate_agent(
         _admin: &AdminCap,
         profile: &mut AgentProfile,
         _ctx: &mut TxContext
     ) {
         profile.is_active = false;
+    }
+
+    /// Check if a given address belongs to a registered and active agent.
+    /// Useful for anti-sybil checks in the marketplace.
+    public fun is_registered(profile: &AgentProfile, delegate_address: address): bool {
+        profile.is_active && profile.delegate_address == delegate_address
     }
 }

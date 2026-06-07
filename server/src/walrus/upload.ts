@@ -33,3 +33,24 @@ export async function uploadToWalrus(blobData: Uint8Array, epochs: number = 1): 
   
   throw new Error('Unexpected response structure from Walrus publisher');
 }
+
+/**
+ * Uploads multiple chunks to Walrus sequentially and tracks progress.
+ */
+export async function uploadBatchToWalrus(
+  chunks: Uint8Array[], 
+  onProgress?: (index: number, total: number) => void
+): Promise<string[]> {
+  const blobIds: string[] = [];
+  
+  for (let i = 0; i < chunks.length; i++) {
+    const { blobId } = await uploadToWalrus(chunks[i]);
+    blobIds.push(blobId);
+    
+    if (onProgress) {
+      onProgress(i + 1, chunks.length);
+    }
+  }
+  
+  return blobIds;
+}

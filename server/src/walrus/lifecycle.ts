@@ -1,5 +1,5 @@
 import { Transaction } from '@mysten/sui/transactions';
-import { suiClient, agentKeypair } from '../config/sui.ts';
+import { suiClient, keypair } from '../config/sui.ts';
 
 // Placeholder package ID for your deployed Move contracts
 const SYNAPSE_PACKAGE_ID = '0x_placeholder_synapse_package_id';
@@ -26,7 +26,7 @@ export async function registerManagedBlob(blobId: string, durationMs: number): P
 
   await suiClient.signAndExecuteTransaction({
     transaction: tx,
-    signer: agentKeypair,
+    signer: keypair,
   });
 }
 
@@ -48,7 +48,7 @@ export async function extendBlobLifetime(managedBlobObjectId: string, additional
 
   await suiClient.signAndExecuteTransaction({
     transaction: tx,
-    signer: agentKeypair,
+    signer: keypair,
   });
 }
 
@@ -69,6 +69,6 @@ export async function pruneExpiredBlob(managedBlobObjectId: string): Promise<voi
 
   await suiClient.signAndExecuteTransaction({
     transaction: tx,
-    signer: agentKeypair,
+    signer: keypair,
   });
 }

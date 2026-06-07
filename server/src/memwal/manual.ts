@@ -1,23 +1,40 @@
-import { MemWalManual } from '@mysten-incubation/memwal/manual';
 import { env } from '../config/env.ts';
-import { encryptMemory } from '../seal/encrypt.ts';
-import { uploadToWalrus } from '../walrus/upload.ts';
+import { sealEncrypt } from '../seal/encrypt.ts';
+import { getStorageDriver } from '../walrus/driver.ts';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Manual MemWal client allows us to encrypt locally with custom Seal policies
-export const manualMemwal = MemWalManual.create({
-  key: env.MEMWAL_DELEGATE_KEY,
-  accountId: env.MEMWAL_ACCOUNT_ID,
-  packageId: env.SEAL_PACKAGE_ID,
-  embeddingApiKey: env.GEMINI_API_KEY || 'mock',
-  sealServerConfigs: [
-    { objectId: env.SEAL_KEY_SERVER_1, weight: 1 },
-    { objectId: env.SEAL_KEY_SERVER_2, weight: 1 },
-  ],
-} as any);
+// Mocking the manual MemWal relayer functions as the SDK might not fully expose them yet
+const mockRelayerDB = new Map<string, { blobId: string, vector: number[] }[]>();
+
+async function generateEmbedding(text: string): Promise<number[]> {
+  if (env.GEMINI_API_KEY) {
+    try {
+      const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
+      const model = genAI.getGenerativeModel({ model: "text-embedding-004" });
+      const result = await model.embedContent(text);
+      return result.embedding.values;
+    } catch (e) {
+      console.warn('[Embeddings] Gemini failed, using fallback hash vector');
+    }
+  }
+  
+  // Fallback: simple deterministic hash vector
+  const vector = new Array(768).fill(0);
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    hash = ((hash << 5) - hash) + text.charCodeAt(i);
+    hash = hash = hash & hash;
+  }
+  const seed = Math.abs(hash) / 2147483647;
+  for (let i = 0; i < 768; i++) {
+    vector[i] = Math.sin(seed * (i + 1));
+  }
+  return vector;
+}
 
 /**
  * Executes the full custom encrypted memory pipeline.
- * 1. Generates text embedding
+ * 1. Generates text embedding using Gemini
  * 2. Encrypts plaintext via Seal (with custom OperatorCap policy)
  * 3. Uploads ciphertext to Walrus
  * 4. Registers blobId and vector with MemWal relayer
@@ -25,24 +42,26 @@ export const manualMemwal = MemWalManual.create({
  * @param plaintext The sensitive agent execution log
  */
 export async function secureRemember(plaintext: string) {
-  // 1. Generate embedding vector locally (mocking if embed is private)
-  const vector = [0.1, 0.2, 0.3]; // Mock vector
+  // 1. Generate embedding vector locally
+  const vector = await generateEmbedding(plaintext);
 
   // 2. Encrypt locally with Seal and custom Move policy
-  const encryptedObject = await encryptMemory(plaintext);
+  // Note: we use a deterministic or unique ID for the manual policy
+  const policyId = `manual_policy_${Date.now()}`;
+  const encryptedObject = await sealEncrypt(plaintext, policyId);
 
   // 3. Upload to Walrus
-  // Serialize the encrypted object to bytes
-  const bytesToUpload = new TextEncoder().encode(JSON.stringify(encryptedObject));
-  const { blobId } = await uploadToWalrus(bytesToUpload);
+  const driver = getStorageDriver(env.STORAGE_DRIVER);
+  const blobIds = await driver.uploadBatch([encryptedObject]);
+  const blobId = blobIds[0];
 
-  // 4. Register with MemWal Relayer
-  await (manualMemwal as any).rememberManual({
-    blobId,
-    vector,
-    namespace: 'synapse-agent-secure',
-  });
+  // 4. Register with MemWal Relayer (mocked for now)
+  const namespace = 'synapse-agent-secure';
+  const entries = mockRelayerDB.get(namespace) || [];
+  entries.push({ blobId, vector });
+  mockRelayerDB.set(namespace, entries);
   
+  console.log(`[MemWal:Manual] Secured memory in blob ${blobId}`);
   return blobId;
 }
 
@@ -53,14 +72,14 @@ export async function secureRemember(plaintext: string) {
  * @param query The semantic search query
  * @param topK Number of results
  */
-export async function secureRecallIds(query: string, topK: number = 5) {
-  const queryVector = [0.1, 0.2, 0.3]; // Mock vector
+export async function secureRecallIds(query: string, topK: number = 5): Promise<string[]> {
+  const queryVector = await generateEmbedding(query);
   
-  const results = await manualMemwal.recallManual({
-    vector: queryVector,
-    topK,
-    namespace: 'synapse-agent-secure',
-  } as any);
+  // For the mock, just return all blobs in the namespace
+  const namespace = 'synapse-agent-secure';
+  const entries = mockRelayerDB.get(namespace) || [];
   
-  return results as any; // Returns Walrus blobIds that match
+  // In a real implementation we would compute cosine similarity. 
+  // Here we just return the most recent ones.
+  return entries.slice(-topK).map(e => e.blobId);
 }

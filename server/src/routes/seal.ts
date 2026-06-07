@@ -1,13 +1,13 @@
 import { Router } from 'express';
-import { encryptMemory } from '../seal/encrypt.ts';
+import { sealEncrypt } from '../seal/encrypt.ts';
 import { env } from '../config/env.ts';
 
 export const sealRouter = Router();
 
 sealRouter.post('/encrypt', async (req, res) => {
   try {
-    const { text } = req.body;
-    const encrypted = await encryptMemory(text);
+    const { text, listingId } = req.body;
+    const encrypted = await sealEncrypt(text, listingId || "mock_listing_id");
     res.json({ encrypted });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -16,7 +16,7 @@ sealRouter.post('/encrypt', async (req, res) => {
 
 sealRouter.get('/vault', (req, res) => {
   res.json({
-    vaultId: env.SEAL_VAULT_OBJECT_ID,
+    vaultId: env.SYNAPSE_PACKAGE_ID,
     packageId: env.SEAL_PACKAGE_ID,
     keyServers: [env.SEAL_KEY_SERVER_1, env.SEAL_KEY_SERVER_2]
   });
