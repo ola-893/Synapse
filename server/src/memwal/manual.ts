@@ -10,7 +10,7 @@ async function generateEmbedding(text: string): Promise<number[]> {
   if (env.GEMINI_API_KEY) {
     try {
       const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
-      const model = genAI.getGenerativeModel({ model: "text-embedding-004" });
+      const model = genAI.getGenerativeModel({ model: "gemini-embedding-2" });
       const result = await model.embedContent(text);
       return result.embedding.values;
     } catch (e) {
