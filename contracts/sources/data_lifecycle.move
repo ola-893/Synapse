@@ -76,7 +76,6 @@ module synapse::data_lifecycle {
         });
     }
 
-    /// Prune expired logs (allows anyone to clean up stale data)
     public fun prune_expired(
         blob: ManagedBlob,
         clock: &Clock,
@@ -90,5 +89,24 @@ module synapse::data_lifecycle {
 
         let ManagedBlob { id, blob_id: _, agent_id: _, created_at: _, expires_at: _ } = blob;
         object::delete(id);
+    }
+
+    // =========================================================================
+    // Seal Decryption Policy for Operators
+    // =========================================================================
+
+    /// The Seal threshold key servers call this via `dry_run_transaction_block`.
+    /// If this function executes without aborting, Seal releases decryption keys
+    /// for the agent's secure memory blobs.
+    ///
+    /// It succeeds only if the caller owns a valid OperatorCap.
+    /// The `_id` parameter is the encryption ID (required by Seal's standard signature).
+    public fun seal_approve_operator_access(
+        _id: vector<u8>,
+        _operator_cap: &synapse::access_control::OperatorCap,
+        _ctx: &TxContext,
+    ) {
+        // If we reach here without aborting, the caller proved they own an OperatorCap.
+        // Seal servers will release the threshold key shares.
     }
 }
