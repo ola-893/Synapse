@@ -13,12 +13,16 @@ import {
   getOwnedCapabilities,
 } from '../lib/sui';
 
+import { useSeal } from '../hooks/useSeal';
+import { uploadToWalrus } from '../lib/walrus';
+
 const DAY_MS = 86_400_000;
 
 export function Encryption() {
   const account = useCurrentAccount();
   const suiClient = useSuiClient();
   const queryClient = useQueryClient();
+  const { encryptData } = useSeal();
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
   const [plainText, setPlainText] = useState('Sensitive Synapse execution log');
   const [policyId, setPolicyId] = useState(`manual_policy_${Date.now()}`);
@@ -39,7 +43,11 @@ export function Encryption() {
   });
 
   const encrypt = useMutation({
-    mutationFn: () => api.sealEncrypt(plainText, policyId),
+    mutationFn: async () => {
+      const encryptedBytes = await encryptData(plainText, policyId);
+      const uploadedBlobId = await uploadToWalrus(encryptedBytes);
+      return { blobId: uploadedBlobId, listingId: policyId };
+    },
   });
 
   const accessAdminCap = caps.data?.accessAdminCaps[0]?.id;
@@ -114,7 +122,7 @@ export function Encryption() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <section className="bg-surface-dim border border-outline-variant rounded-lg p-6">
           <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-            <Lock className="w-5 h-5 text-tertiary" /> Encrypt via Backend
+            <Lock className="w-5 h-5 text-tertiary" /> Encrypt & Upload (Client-Side)
           </h2>
           <input
             value={policyId}
@@ -132,7 +140,7 @@ export function Encryption() {
             disabled={!plainText.trim() || encrypt.isPending}
             className="mt-3 w-full rounded-lg bg-tertiary px-4 py-3 font-semibold text-white disabled:opacity-50"
           >
-            {encrypt.isPending ? 'Encrypting...' : 'Encrypt Payload'}
+            {encrypt.isPending ? 'Processing...' : 'Encrypt & Upload'}
           </button>
           {encrypt.data || encrypt.error ? (
             <pre className="mt-4 max-h-44 overflow-auto rounded-lg border border-outline-variant bg-surface p-3 text-xs">

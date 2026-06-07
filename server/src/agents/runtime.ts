@@ -1,15 +1,25 @@
-import { agentAddress } from '../config/sui.ts';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import cron from 'node-cron';
 import { getMemWal } from '../config/memwal.ts';
 import { secureRemember } from '../memwal/manual.ts';
 import { getActiveListings } from '../marketplace/discovery.ts';
 import { purchaseDataset, ingestDataset } from '../marketplace/buyer.ts';
+import { saveAgentWallet, getAgentWallet } from '../db/sqlite.ts';
 
 let activeTask: cron.ScheduledTask | null = null;
 let lastTickTime: Date | null = null;
 let isRunning = false;
-let isRegistered = false;
 let tickCount = 0;
+
+// The active owner connected via the dashboard
+let activeOwnerAddress: string | null = null;
+
+export async function getActiveAgentKeypair(): Promise<Ed25519Keypair | null> {
+  if (!activeOwnerAddress) return null;
+  const wallet = await getAgentWallet(activeOwnerAddress);
+  if (!wallet) return null;
+  return Ed25519Keypair.fromSecretKey(Buffer.from(wallet.privateKeyStr, 'hex'));
+}
 
 /**
  * AI Brain evaluates if a dataset is worth purchasing based on its description and price.
@@ -30,9 +40,18 @@ async function executeAgentTick() {
   lastTickTime = new Date();
 
   try {
+    if (!activeOwnerAddress) throw new Error('No active owner set for the runtime.');
+    
+    // Retrieve and decrypt the wallet on-the-fly
+    const walletData = await getAgentWallet(activeOwnerAddress);
+    if (!walletData) throw new Error('Agent wallet not found in database for owner');
+    
+    const agentKeypair = Ed25519Keypair.fromSecretKey(Buffer.from(walletData.privateKeyStr, 'hex'));
+    const currentAgentAddress = walletData.agentAddress;
+
     // 1. RECALL context before execution
     console.log(`[Agent] Recalling context from MemWal...`);
-    const pastStrategies = await getMemWal(agentAddress).recall("alpha trading signals");
+    const pastStrategies = await getMemWal(currentAgentAddress).recall("alpha trading signals");
     console.log(`[Agent] Recalled ${pastStrategies?.length || 0} memories for context.`);
 
     // 2. DISCOVER new listings on the marketplace
@@ -47,13 +66,13 @@ async function executeAgentTick() {
       if (isValuable) {
         console.log(`[Agent] AI Brain decided to purchase dataset: "${listing.title}"`);
         try {
-          const receiptId = await purchaseDataset(listing);
+          const receiptId = await purchaseDataset(listing, agentKeypair);
           console.log(`[Agent] Ingesting purchased knowledge...`);
-          await ingestDataset(listing, receiptId);
+          await ingestDataset(listing, receiptId, agentKeypair);
           console.log(`[Agent] Successfully learned new knowledge from marketplace!`);
           
           // Log the acquisition
-          await getMemWal(agentAddress).remember(`Purchased and ingested dataset: ${listing.title} for ${listing.priceMist} MIST.`);
+          await getMemWal(currentAgentAddress).remember(`Purchased and ingested dataset: ${listing.title} for ${listing.priceMist} MIST.`);
         } catch (e: any) {
           console.error(`[Agent] Failed to purchase/ingest dataset:`, e.message);
         }
@@ -72,16 +91,31 @@ async function executeAgentTick() {
   }
 }
 
-export function registerAgent(config?: any) {
-  if (isRegistered) return;
-  console.log('Registering Synapse Agent...');
-  isRegistered = true;
+export async function registerAgent(config: { ownerPublicKey: string }): Promise<{ agentAddress: string }> {
+  // Check if wallet already exists in the database
+  const existingWallet = await getAgentWallet(config.ownerPublicKey);
+  
+  if (existingWallet) {
+    console.log(`[Agent] Found existing wallet for owner: ${config.ownerPublicKey}`);
+    activeOwnerAddress = config.ownerPublicKey;
+    return { agentAddress: existingWallet.agentAddress };
+  }
+
+  console.log(`[Agent] Generating new wallet for owner: ${config.ownerPublicKey}`);
+  const newKeypair = new Ed25519Keypair();
+  const agentAddress = newKeypair.getPublicKey().toSuiAddress();
+  
+  // Export the 32-byte secret key as a hex string
+  const privateKeyStr = Buffer.from(newKeypair.getSecretKey()).toString('hex');
+  
+  // Encrypt and save to DB
+  await saveAgentWallet(config.ownerPublicKey, agentAddress, privateKeyStr);
+  
+  activeOwnerAddress = config.ownerPublicKey;
+  return { agentAddress };
 }
 
 export function startAgentLoop() {
-  if (!isRegistered) {
-    throw new Error('Agent must be registered before starting');
-  }
   if (isRunning) return;
   console.log('Starting Synapse Agent Runtime (2-minute intervals)...');
   
@@ -94,19 +128,24 @@ export function startAgentLoop() {
 }
 
 export function stopAgentLoop() {
-  if (!isRegistered) {
-    throw new Error('Agent must be registered before stopping');
-  }
   if (!isRunning || !activeTask) return;
   console.log('Stopping Synapse Agent Runtime...');
   activeTask.stop();
   isRunning = false;
 }
 
-export function getAgentStatus() {
+export async function getAgentStatus() {
+  let agentAddress = null;
+  if (activeOwnerAddress) {
+    const wallet = await getAgentWallet(activeOwnerAddress);
+    if (wallet) agentAddress = wallet.agentAddress;
+  }
+
   return {
-    isRegistered,
+    isRegistered: agentAddress !== null,
     isRunning,
+    agentAddress,
+    ownerAddress: activeOwnerAddress,
     lastTickTime,
     tickCount
   };

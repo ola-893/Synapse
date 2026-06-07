@@ -7,10 +7,13 @@ import { sealDecrypt } from '../seal/decrypt.ts';
 import { createSessionKey, buildApprovalTransaction } from '../seal/session.ts';
 import { DatasetListing } from './types.ts';
 
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+
 /**
  * Purchases a dataset on-chain.
  */
-export async function purchaseDataset(listing: DatasetListing): Promise<string> {
+export async function purchaseDataset(listing: DatasetListing, agentKeypair: Ed25519Keypair): Promise<string> {
+  const agentAddress = agentKeypair.getPublicKey().toSuiAddress();
   const tx = new Transaction();
   
   // Split payment coin
@@ -27,7 +30,7 @@ export async function purchaseDataset(listing: DatasetListing): Promise<string> 
 
   const { digest } = await suiClient.signAndExecuteTransaction({
     transaction: tx,
-    signer: keypair
+    signer: agentKeypair
   });
 
   const res = await suiClient.waitForTransaction({
@@ -51,14 +54,15 @@ export async function purchaseDataset(listing: DatasetListing): Promise<string> 
 /**
  * Ingests a purchased dataset.
  */
-export async function ingestDataset(listing: DatasetListing, receiptId: string) {
+export async function ingestDataset(listing: DatasetListing, receiptId: string, agentKeypair: Ed25519Keypair) {
+  const agentAddress = agentKeypair.getPublicKey().toSuiAddress();
   const driver = getStorageDriver(env.STORAGE_DRIVER);
   
   console.log(`[Buyer] Downloading ${listing.blobIds.length} chunks from storage...`);
   const encryptedChunks = await driver.downloadBatch(listing.blobIds);
 
   console.log(`[Buyer] Creating Seal session key...`);
-  const sessionKey = await createSessionKey(agentAddress, keypair);
+  const sessionKey = await createSessionKey(agentAddress, agentKeypair);
 
   console.log(`[Buyer] Building Seal approval PTB using PurchaseReceipt...`);
   const txBytes = await buildApprovalTransaction(listing.id, receiptId, agentAddress, listing.sealPolicyId);

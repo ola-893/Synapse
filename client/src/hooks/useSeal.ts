@@ -64,5 +64,21 @@ export function useSeal() {
     return new TextDecoder().decode(decrypted);
   };
 
-  return { sealClient, sessionKey, createSession, isInitializing, decryptData };
+  const encryptData = async (data: string, policyId: string) => {
+    const dataBytes = new TextEncoder().encode(data);
+    const packageId = (import.meta as any).env.VITE_SEAL_PACKAGE_ID || '0x984960ebddd75c15c6d38355ac462621db0ffc7d6647214c802cd3b685e1af3d';
+    
+    const { encryptedObject } = await sealClient.encrypt({
+      kemType: 0,
+      demType: 1,
+      threshold: 1,
+      packageId,
+      id: policyId,
+      data: dataBytes
+    });
+    
+    return new Uint8Array(encryptedObject);
+  };
+
+  return { sealClient, sessionKey, createSession, isInitializing, decryptData, encryptData };
 }

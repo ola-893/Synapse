@@ -74,9 +74,14 @@ export const api = {
       headers: digest ? { 'x-sui-payment-digest': digest } : undefined,
     }),
 
-  agentStatus: () => request<AgentStatus>('/api/agent/status'),
+  agentStatus: () => request<AgentStatus & { ownerAddress?: string | null; agentAddress?: string | null }>('/api/agent/status'),
   startAgent: () => request<{ message: string }>('/api/agent/start', { method: 'POST' }),
   stopAgent: () => request<{ message: string }>('/api/agent/stop', { method: 'POST' }),
+  registerAgent: (ownerPublicKey: string) => 
+    request<{ message: string; agentAddress: string }>('/api/agent/register', { 
+      method: 'POST', body: JSON.stringify({ ownerPublicKey }) 
+    }),
+  getAgentWallet: () => request<{ publicKey: string }>('/api/agent/wallet'),
 
   remember: (text: string, secure: boolean) =>
     request<{ message: string; job?: unknown; blobId?: string }>('/api/memory/remember', {

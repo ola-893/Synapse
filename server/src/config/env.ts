@@ -7,6 +7,7 @@ const envSchema = z.object({
   // Sui
   SUI_NETWORK: z.enum(['mainnet', 'testnet', 'devnet', 'localnet']).default('testnet'),
   SUI_PRIVATE_KEY: z.string().default(''),
+  AGENT_WALLET_ENCRYPTION_KEY: z.string().min(32, "Encryption key must be at least 32 characters").default('1f9c8d7e6b5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a0f9e'),
 
   // MemWal
   MEMWAL_DELEGATE_KEY: z.string().default(''),

@@ -31,8 +31,4 @@ app.get('/api/protected/data', requireX402Payment(5000000), (req, res) => {
 
 app.listen(env.PORT, () => {
   console.log(`Synapse server listening on port ${env.PORT}`);
-  
-  if (env.AUTO_START) {
-    startAgentLoop();
-  }
 });

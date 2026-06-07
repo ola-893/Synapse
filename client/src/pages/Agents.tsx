@@ -120,7 +120,18 @@ export function Agents() {
               disabled={!account || !agentAdminCap}
               className="w-full rounded-lg bg-primary px-4 py-3 font-semibold text-white disabled:opacity-50"
             >
-              Register Agent
+              Register Agent On-Chain
+            </button>
+            <button
+              onClick={() => {
+                if (account) {
+                  api.registerAgent(account.address).then(res => setTxResult(`Backend Wallet Created: ${res.agentAddress}`)).catch(e => setTxResult(e.message));
+                }
+              }}
+              disabled={!account}
+              className="w-full rounded-lg border border-primary text-primary px-4 py-3 font-semibold disabled:opacity-50"
+            >
+              Initialize Backend Agent Wallet
             </button>
           </div>
         </section>

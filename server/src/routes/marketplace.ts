@@ -48,7 +48,11 @@ marketplaceRouter.post('/purchase/:id', async (req, res) => {
     const listing = await getListingById(req.params.id);
     if (!listing) return res.status(404).json({ error: 'Listing not found' });
     
-    const receiptId = await purchaseDataset(listing);
+    const { getActiveAgentKeypair } = await import('../agents/runtime.ts');
+    const agentKeypair = await getActiveAgentKeypair();
+    if (!agentKeypair) return res.status(400).json({ error: 'No active agent registered.' });
+
+    const receiptId = await purchaseDataset(listing, agentKeypair);
     res.json({ message: 'Dataset purchased successfully', receiptId });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -65,7 +69,11 @@ marketplaceRouter.post('/ingest/:id', requireX402Payment(), async (req, res) => 
     const listing = await getListingById(req.params.id);
     if (!listing) return res.status(404).json({ error: 'Listing not found' });
 
-    await ingestDataset(listing, receiptId);
+    const { getActiveAgentKeypair } = await import('../agents/runtime.ts');
+    const agentKeypair = await getActiveAgentKeypair();
+    if (!agentKeypair) return res.status(400).json({ error: 'No active agent registered.' });
+
+    await ingestDataset(listing, receiptId, agentKeypair);
     res.json({ message: 'Dataset ingested successfully' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -77,6 +85,12 @@ marketplaceRouter.post('/query', requireX402Payment(1000000), async (req, res) =
   try {
     const { query } = req.body;
     if (!query) return res.status(400).json({ error: 'Missing query' });
+
+    const { getActiveAgentKeypair } = await import('../agents/runtime.ts');
+    const agentKeypair = await getActiveAgentKeypair();
+    if (!agentKeypair) return res.status(400).json({ error: 'No active agent registered.' });
+    
+    const agentAddress = agentKeypair.getPublicKey().toSuiAddress();
 
     // Call MemWal recall
     const memwal = getMemWal(agentAddress);
