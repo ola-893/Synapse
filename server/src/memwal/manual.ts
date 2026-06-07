@@ -47,7 +47,8 @@ export async function secureRemember(plaintext: string) {
 
   // 2. Encrypt locally with Seal and custom Move policy
   // Note: we use a deterministic or unique ID for the manual policy
-  const policyId = `manual_policy_${Date.now()}`;
+  // Must be a valid 32-byte hex string (64 characters)
+  const policyId = Array.from({ length: 32 }, () => Math.floor(Math.random() * 256).toString(16).padStart(2, '0')).join('');
   const encryptedObject = await sealEncrypt(plaintext, policyId);
 
   // 3. Upload to Walrus

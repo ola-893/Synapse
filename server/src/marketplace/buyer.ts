@@ -25,16 +25,20 @@ export async function purchaseDataset(listing: DatasetListing): Promise<string> 
     ]
   });
 
-  const res = await suiClient.signAndExecuteTransaction({
+  const { digest } = await suiClient.signAndExecuteTransaction({
     transaction: tx,
-    signer: keypair,
+    signer: keypair
+  });
+
+  const res = await suiClient.waitForTransaction({
+    digest,
     options: {
       showEffects: true,
       showEvents: true
     }
   });
 
-  console.log(`[Buyer] Purchased dataset ${listing.id}. TX: ${res.digest}`);
+  console.log(`[Buyer] Purchased dataset ${listing.id}. TX: ${digest}`);
 
   // Find the PurchaseReceipt ID in the created objects
   const createdObjects = res.effects?.created || [];

@@ -45,9 +45,13 @@ export async function listDataset(chunks: string[], metadata: ListingMetadata, p
     ]
   });
 
-  const res = await suiClient.signAndExecuteTransaction({
+  const { digest } = await suiClient.signAndExecuteTransaction({
     transaction: tx,
-    signer: keypair,
+    signer: keypair
+  });
+
+  const res = await suiClient.waitForTransaction({
+    digest,
     options: {
       showEffects: true,
       showEvents: true
@@ -58,6 +62,6 @@ export async function listDataset(chunks: string[], metadata: ListingMetadata, p
   if (!event) throw new Error("Listing event not found in transaction");
   const listingObjectId = (event as any).parsedJson?.listing_id;
 
-  console.log(`[Seller] Listed dataset on-chain. TX: ${res.digest}, Listing ID: ${listingObjectId}`);
+  console.log(`[Seller] Listed dataset on-chain. TX: ${digest}, Listing ID: ${listingObjectId}`);
   return listingObjectId;
 }
