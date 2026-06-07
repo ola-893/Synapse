@@ -249,15 +249,15 @@ git clone https://github.com/ola-893/Synapse.git
 cd Synapse
 ```
 
-### 2. Install Dependencies
+### 2. Install Dependencies & Run the Stack
+
+You can install all dependencies and start both the Express backend and React frontend simultaneously with a single command from the project root:
 
 ```bash
-# Backend
-cd server && npm install
-
-# Frontend
-cd ../client && npm install
+npm run dev
 ```
+
+This uses `concurrently` to spin up both the backend (Port 3001) and frontend (Port 5173).
 
 ### 3. Configure Environment
 
@@ -270,30 +270,23 @@ Edit `.env` with your credentials:
 ```env
 SUI_NETWORK=testnet
 SUI_PRIVATE_KEY=<your-sui-private-key>
-WALRUS_PUBLISHER_URL=https://publisher.walrus-testnet.walrus.space
-WALRUS_AGGREGATOR_URL=https://aggregator.walrus-testnet.walrus.space
-MEMWAL_DELEGATE_KEY=<your-delegate-key>
-SEAL_POLICY_OBJECT_ID=<your-seal-policy-id>
+SYNAPSE_PACKAGE_ID=0x0982401c235bbbf32b99e420f365eb7df0264c3f4ee7785978cd7d58a571e62b
+SEAL_PACKAGE_ID=0x984960ebddd75c15c6d38355ac462621db0ffc7d6647214c802cd3b685e1af3d
 GEMINI_API_KEY=<your-gemini-api-key>
+MEMWAL_DELEGATE_KEY=<optional-memwal-key>
+MEMWAL_ACCOUNT_ID=<optional-memwal-id>
 ```
 
-### 4. Deploy Move Contracts
+### 4. Deploy Move Contracts (Optional)
+
+If you wish to deploy your own instance of the Synapse contracts:
 
 ```bash
 cd contracts
 sui move build
-sui client publish --gas-budget 100000000
+sui client publish --gas-budget 500000000
 ```
-
-### 5. Run the Stack
-
-```bash
-# Terminal 1 — Backend
-cd server && npm run dev
-
-# Terminal 2 — Frontend
-cd client && npm run dev
-```
+*(Remember to update `SYNAPSE_PACKAGE_ID` in both `.env` and `client/.env` if you deploy your own).*
 
 ---
 
@@ -331,13 +324,13 @@ npm run test:e2e
 ## 🗺️ Roadmap
 
 - [x] Core architecture design
-- [ ] MemWal SDK integration with agent runtime
-- [ ] Seal encryption pipeline for sensitive data blobs
-- [ ] Move smart contracts — access control, lifecycle, registry
-- [ ] x402 payment negotiation engine
-- [ ] DeepBook arbitrage agent with memory persistence
-- [ ] React dashboard — agent monitoring, memory explorer, access logs
-- [ ] Multi-agent coordination protocol
+- [x] MemWal SDK integration with agent runtime
+- [x] Seal encryption pipeline for sensitive data blobs
+- [x] Move smart contracts — access control, lifecycle, registry
+- [x] x402 payment negotiation engine
+- [x] DeepBook arbitrage agent with memory persistence
+- [x] React dashboard — agent monitoring, memory explorer, access logs
+- [x] Multi-agent coordination protocol
 - [ ] Mainnet deployment
 - [ ] SDK extraction for third-party agent builders
 
