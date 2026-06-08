@@ -7,8 +7,11 @@ export type HealthResponse = {
 
 export type AgentStatus = {
   isRunning: boolean;
+  isRegistered?: boolean;
   lastTickTime: string | null;
   tickCount: number;
+  ownerAddress?: string | null;
+  agentAddress?: string | null;
 };
 
 export type DatasetListing = {
@@ -74,7 +77,7 @@ export const api = {
       headers: digest ? { 'x-sui-payment-digest': digest } : undefined,
     }),
 
-  agentStatus: () => request<AgentStatus & { ownerAddress?: string | null; agentAddress?: string | null }>('/api/agent/status'),
+  agentStatus: () => request<AgentStatus>('/api/agent/status'),
   startAgent: () => request<{ message: string }>('/api/agent/start', { method: 'POST' }),
   stopAgent: () => request<{ message: string }>('/api/agent/stop', { method: 'POST' }),
   registerAgent: (ownerPublicKey: string) => 

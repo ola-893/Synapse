@@ -11,14 +11,9 @@ COPY package*.json ./
 # Install dependencies
 RUN npm install
 
-# Copy source code
-COPY . .
-
-# Build TypeScript
-RUN npm run build
-
+# Source code is bind-mounted at runtime for hot reload
 # Expose port
 EXPOSE 3001
 
-# Command to run the compiled application
-CMD ["npm", "run", "dev"]
+# Command to run tsx in watch mode
+CMD ["npx", "tsx", "watch", "src/index.ts"]

@@ -8,9 +8,7 @@ COPY package*.json ./
 # Install dependencies
 RUN npm install
 
-# Copy source code
-COPY . .
-
+# Source code is bind-mounted at runtime for hot reload
 # Expose port
 EXPOSE 5173
 

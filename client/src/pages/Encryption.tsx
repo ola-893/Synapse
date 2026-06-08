@@ -1,7 +1,8 @@
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Database, KeyRound, Lock, Plus, ShieldCheck } from 'lucide-react';
+import { Database, FileUp, KeyRound, Lock, Plus, ShieldCheck, Store, UploadCloud } from 'lucide-react';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import {
   buildExtendBlobTx,
@@ -18,6 +19,15 @@ import { uploadToWalrus } from '../lib/walrus';
 
 const DAY_MS = 86_400_000;
 
+function bytesToBase64(bytes: Uint8Array) {
+  const chunkSize = 0x8000;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
 export function Encryption() {
   const account = useCurrentAccount();
   const suiClient = useSuiClient();
@@ -30,6 +40,7 @@ export function Encryption() {
   const [blobId, setBlobId] = useState('');
   const [managedBlobId, setManagedBlobId] = useState('');
   const [txResult, setTxResult] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const vault = useQuery({ queryKey: ['seal-vault'], queryFn: api.sealVault });
   const caps = useQuery({
@@ -48,7 +59,23 @@ export function Encryption() {
       const uploadedBlobId = await uploadToWalrus(encryptedBytes);
       return { blobId: uploadedBlobId, listingId: policyId };
     },
+    onSuccess: (data) => setBlobId(data.blobId),
   });
+
+  const loadFile = async (file: File) => {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const payload = {
+      name: file.name,
+      type: file.type || 'application/octet-stream',
+      size: file.size,
+      lastModified: file.lastModified,
+      encoding: 'base64',
+      data: bytesToBase64(bytes),
+    };
+    setSelectedFile(file);
+    setPlainText(JSON.stringify(payload, null, 2));
+    setPolicyId(`dataset_${file.name.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}_${Date.now()}`);
+  };
 
   const accessAdminCap = caps.data?.accessAdminCaps[0]?.id;
 
@@ -63,16 +90,18 @@ export function Encryption() {
   };
 
   return (
-    <div className="p-10 max-w-6xl mx-auto w-full">
+    <div className="p-4 sm:p-6 lg:p-10 max-w-6xl mx-auto w-full">
       <div className="mb-10">
-        <h1 className="text-5xl font-bold tracking-tight text-on-surface mb-3 flex items-center gap-4">
+        <p className="mb-3 text-xs font-mono uppercase tracking-widest text-outline">Seller journey</p>
+        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-on-surface mb-3 flex items-center gap-4">
           <div className="w-10 h-10 bg-tertiary-container rounded-lg flex items-center justify-center text-tertiary">
             <Lock className="w-6 h-6" />
           </div>
-          Synapse Seal Control
+          Encrypt and Upload
         </h1>
         <p className="text-lg text-on-surface-variant max-w-2xl leading-relaxed">
-          Encrypt payloads through the backend, inspect Seal vault config, and run access-control and blob-lifecycle Move calls.
+          Encrypt PDFs, JSON, CSV, or pasted data directly in the browser with Seal, then upload ciphertext to Walrus for
+          marketplace listing.
         </p>
       </div>
 
@@ -122,8 +151,26 @@ export function Encryption() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <section className="bg-surface-dim border border-outline-variant rounded-lg p-6">
           <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-            <Lock className="w-5 h-5 text-tertiary" /> Encrypt & Upload (Client-Side)
+            <UploadCloud className="w-5 h-5 text-tertiary" /> Encrypt & Upload
           </h2>
+          <label className="mb-3 flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-outline-variant bg-surface px-4 py-6 text-center">
+            <FileUp className="mb-2 h-6 w-6 text-primary" />
+            <span className="text-sm font-semibold text-on-surface">
+              {selectedFile ? selectedFile.name : 'Choose PDF, JSON, CSV, or text file'}
+            </span>
+            <span className="mt-1 text-xs text-outline">
+              {selectedFile ? `${selectedFile.size.toLocaleString()} bytes staged locally` : 'File bytes are encoded and encrypted in this browser'}
+            </span>
+            <input
+              type="file"
+              className="sr-only"
+              accept=".pdf,.json,.csv,.txt,application/pdf,application/json,text/csv,text/plain"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) loadFile(file).catch((error) => setTxResult(error.message));
+              }}
+            />
+          </label>
           <input
             value={policyId}
             onChange={(event) => setPolicyId(event.target.value)}
@@ -143,9 +190,19 @@ export function Encryption() {
             {encrypt.isPending ? 'Processing...' : 'Encrypt & Upload'}
           </button>
           {encrypt.data || encrypt.error ? (
-            <pre className="mt-4 max-h-44 overflow-auto rounded-lg border border-outline-variant bg-surface p-3 text-xs">
-              {JSON.stringify(encrypt.data ?? { error: encrypt.error.message }, null, 2)}
-            </pre>
+            <div className="mt-4 rounded-lg border border-outline-variant bg-surface p-3">
+              <pre className="max-h-32 overflow-auto text-xs">
+                {JSON.stringify(encrypt.data ?? { error: encrypt.error.message }, null, 2)}
+              </pre>
+              {encrypt.data ? (
+                <Link
+                  to="/marketplace"
+                  className="mt-3 inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white"
+                >
+                  <Store className="h-4 w-4" /> Publish listing
+                </Link>
+              ) : null}
+            </div>
           ) : null}
         </section>
 

@@ -7,6 +7,7 @@ import Agents from './pages/Agents';
 import Encryption from './pages/Encryption';
 import DeepBook from './pages/DeepBook';
 import Marketplace from './pages/Marketplace';
+import SellData from './pages/SellData';
 import { Landing } from './pages/Landing';
 import { Sidebar } from './components/Sidebar';
 import { TopNav } from './components/TopNav';
@@ -21,6 +22,7 @@ type TabId =
   | 'landing'
   | 'dashboard'
   | 'agents'
+  | 'sell'
   | 'memory'
   | 'marketplace'
   | 'encryption'
@@ -47,6 +49,14 @@ function AppShell() {
   const navigate = useNavigate();
 
   const activeTab: TabId = (location.pathname.replace('/', '') as TabId) || 'landing';
+  const pageTitle =
+    activeTab === 'agents'
+      ? 'Agent Wallet'
+      : activeTab === 'sell'
+        ? 'Sell Data'
+      : activeTab === 'marketplace'
+        ? 'Data Marketplace'
+        : 'Synapse Market';
 
   const setActiveTab = (id: string) => {
     const to = (() => {
@@ -57,6 +67,8 @@ function AppShell() {
           return '/memory';
         case 'marketplace':
           return '/marketplace';
+        case 'sell':
+          return '/sell';
         case 'agents':
           return '/agents';
         case 'encryption':
@@ -77,7 +89,7 @@ function AppShell() {
 
   // Landing must be standalone: no shared sidebar/top nav shell.
   if (location.pathname === '/') {
-    return <Landing onEnterApp={() => setActiveTab('dashboard')} />;
+    return <Landing onEnterApp={() => setActiveTab('marketplace')} />;
   }
 
   return (
@@ -85,18 +97,19 @@ function AppShell() {
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
 
       <div className="w-full lg:ml-[280px] flex flex-col">
-        <TopNav title="Operator Console" />
+        <TopNav title={pageTitle} />
         <main className="hide-scrollbar overflow-y-auto h-[calc(100vh-72px)]">
           <Routes>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/memory" element={<MemoryExplorer />} />
             <Route path="/agents" element={<Agents />} />
+            <Route path="/sell" element={<SellData />} />
             <Route path="/marketplace" element={<Marketplace />} />
             <Route path="/encryption" element={<Encryption />} />
             <Route path="/deepbook" element={<DeepBook />} />
             <Route path="/settings" element={<ComingSoon />} />
             <Route path="/support" element={<ComingSoon />} />
-            <Route path="*" element={<Landing onEnterApp={() => setActiveTab('dashboard')} />} />
+            <Route path="*" element={<Landing onEnterApp={() => setActiveTab('marketplace')} />} />
           </Routes>
         </main>
       </div>
