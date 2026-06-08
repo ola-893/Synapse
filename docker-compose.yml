@@ -4,7 +4,7 @@ services:
       context: ./server
       dockerfile: Dockerfile
     ports:
-      - "3001:3001"
+      - "3002:3002"
     volumes:
       - ./server/src:/app/src
       - ./server/package.json:/app/package.json

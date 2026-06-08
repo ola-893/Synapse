@@ -13,7 +13,7 @@ RUN npm install
 
 # Source code is bind-mounted at runtime for hot reload
 # Expose port
-EXPOSE 3001
+EXPOSE 3002
 
 # Command to run tsx in watch mode
 CMD ["npx", "tsx", "watch", "src/index.ts"]
