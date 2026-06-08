@@ -302,6 +302,8 @@ export function Agents() {
       status.data.ownerAddress.toLowerCase() === account.address.toLowerCase()
   );
   const backendRegistered = Boolean(status.data?.agentAddress && activeOwnerMatchesWallet);
+  const backendStatusLoading = status.isLoading || status.isFetching;
+
   const hasDifferentActiveOwner = Boolean(account && status.data?.ownerAddress && !activeOwnerMatchesWallet);
   const startDisabled = start.isPending || !backendRegistered;
   const activeListings = listings.data?.listings.filter((listing) => listing.isActive) ?? [];
@@ -338,6 +340,17 @@ export function Agents() {
   };
 
   if (!backendRegistered) {
+    if (backendStatusLoading) {
+      return (
+        <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto w-full">
+          <div className="mb-8">
+            <p className="mb-3 text-xs font-mono uppercase tracking-widest text-outline">Agent owner</p>
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-on-surface mb-3">Loading agent status...</h1>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto w-full">
         <div className="mb-8">
@@ -481,39 +494,49 @@ export function Agents() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
         <div className="bg-surface-dim border border-outline-variant p-6 rounded-lg">
+
           <p className="text-xs font-mono uppercase tracking-widest text-outline mb-2">Runtime State</p>
-          <p className="text-4xl font-bold mb-4">{status.data?.isRunning ? 'Running' : 'Stopped'}</p>
+          <p className="text-2xl font-bold mb-4">{status.data?.isRunning ? 'Running' : 'Stopped'}</p>
           <p className="text-sm text-outline">{status.data?.lastTickTime ? new Date(status.data.lastTickTime).toLocaleString() : 'No tick recorded'}</p>
         </div>
         <div className="bg-surface-dim border border-outline-variant p-6 rounded-lg">
           <p className="text-xs font-mono uppercase tracking-widest text-outline mb-2">Agent Wallet</p>
-          <p className="text-4xl font-bold mb-4">{backendRegistered ? 'Ready' : 'Missing'}</p>
+          <p className="text-2xl font-bold mb-4">{backendRegistered ? 'Ready' : 'Missing'}</p>
+
           <p className="text-sm font-mono text-outline flex items-center gap-2">
-              {status.data?.agentAddress ? (
-                <>
-                  {formatAddress(status.data.agentAddress)}
-                  <button
-                    onClick={() => handleCopy(status.data!.agentAddress!)}
-                    className="inline-flex items-center justify-center h-6 w-6 rounded-md hover:bg-surface-variant transition-colors"
-                    title="Copy agent wallet address"
-                  >
-                    {copiedAddress === status.data!.agentAddress ? (
-                      <CheckCircle2 className="h-3.5 w-3.5 text-tertiary" />
-                    ) : (
-                      <Copy className="h-3.5 w-3.5 text-outline" />
-                    )}
-                  </button>
-                </>
-              ) : (
-                'Create one before Start'
-              )}
-            </p>
+            {status.data?.agentAddress ? (
+              <>
+                {formatAddress(status.data.agentAddress)}
+                <button
+                  onClick={() => handleCopy(status.data!.agentAddress!)}
+                  className="inline-flex items-center justify-center h-6 w-6 rounded-md hover:bg-surface-variant transition-colors"
+                  title="Copy agent wallet address"
+                >
+                  {copiedAddress === status.data!.agentAddress ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-tertiary" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5 text-outline" />
+                  )}
+                </button>
+              </>
+            ) : (
+              'Create one before Start'
+            )}
+          </p>
         </div>
+
+        <div className="bg-surface-dim border border-outline-variant p-6 rounded-lg">
+          <p className="text-xs font-mono uppercase tracking-widest text-outline mb-2">Wallet Balance</p>
+          <p className="text-2xl font-bold mb-4">{agentBalance.data ? `${formatMist(agentBalance.data.totalBalance)}` : '--'}</p>
+          <p className="text-sm text-outline">Available for agent purchases</p>
+        </div>
+
         <div className="bg-surface-dim border border-outline-variant p-6 rounded-lg">
           <p className="text-xs font-mono uppercase tracking-widest text-outline mb-2">Memory Growth</p>
-          <p className="text-4xl font-bold mb-4">{status.data?.tickCount ?? 0}</p>
+
+          <p className="text-2xl font-bold mb-4">{status.data?.tickCount ?? 0}</p>
           <p className="text-sm text-outline">Agent ticks executed by the runtime</p>
         </div>
       </div>

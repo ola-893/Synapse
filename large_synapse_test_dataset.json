@@ -1,0 +1,20 @@
+{
+  "chunks": [
+    "chunk-1: alpha / signal / degen. This synthetic chunk is generated for testing dataset ingestion and marketplace listing. It contains repeated alpha/signal intent so the agent evaluation heuristics can find matches.\n- evidence point A: alpha relates to observed returns and regime shifts.\n- evidence point B: signal correlates with liquidity and spreads.\n- evidence point C: degen improves forecast calibration under volatility.\n- caution: this is test data; do not use for real decisions.",
+    "chunk-2: price discovery / liquidity / momentum. This synthetic chunk is generated for testing dataset ingestion and marketplace listing. It contains repeated alpha/signal intent so the agent evaluation heuristics can find matches.\n- evidence point A: price discovery relates to observed returns and regime shifts.\n- evidence point B: liquidity correlates with liquidity and spreads.\n- evidence point C: momentum improves forecast calibration under volatility.\n- caution: this is test data; do not use for real decisions.",
+    "chunk-3: mean reversion / volatility / risk management. This synthetic chunk is generated for testing dataset ingestion and marketplace listing. It contains repeated alpha/signal intent so the agent evaluation heuristics can find matches.\n- evidence point A: mean reversion relates to observed returns and regime shifts.\n- evidence point B: volatility correlates with liquidity and spreads.\n- evidence point C: risk management improves forecast calibration under volatility.\n- caution: this is test data; do not use for real decisions.",
+    "chunk-4: orderflow / sentiment / trend. This synthetic chunk is generated for testing dataset ingestion and marketplace listing. It contains repeated alpha/signal intent so the agent evaluation heuristics can find matches.\n- evidence point A: orderflow relates to observed returns and regime shifts.\n- evidence point B: sentiment correlates with liquidity and spreads.\n- evidence point C: trend improves forecast calibration under volatility.\n- caution: this is test data; do not use for real decisions.",
+    "chunk-5: latency / basis / gamma. This synthetic chunk is generated for testing dataset ingestion and marketplace listing. It contains repeated alpha/signal intent so the agent evaluation heuristics can find matches.\n- evidence point A: latency relates to observed returns and regime shifts.\n- evidence point B: basis correlates with liquidity and spreads.\n- evidence point C: gamma improves forecast calibration under volatility.\n- caution: this is test data; do not use for real decisions.",
+    "chunk-6: alpha / orderflow / liquidity. Another synthetic chunk for stress-testing.\n- alpha signal notes: alpha + orderflow patterns\n- liquidity notes: spreads and depth heuristics\n- caution: test data only",
+    "chunk-7: signal / trend / momentum. Another synthetic chunk for stress-testing.\n- signal notes: signal persistence in regimes\n- momentum notes: price continuation hypothesis\n- caution: test data only",
+    "chunk-8: degen / volatility / risk management. Another synthetic chunk for stress-testing.\n- degen notes: degen market microstructure\n- volatility notes: regime-dependent risk\n- caution: test data only",
+    "chunk-9: price discovery / sentiment / orderflow. Another synthetic chunk for stress-testing.\n- price discovery notes: catalyst discovery\n- sentiment notes: sentiment drift\n- caution: test data only",
+    "chunk-10: mean reversion / latency / basis. Another synthetic chunk for stress-testing.\n- mean reversion notes: spread reversion\n- latency notes: execution advantage\n- caution: test data only"
+  ],
+  "metadata": {
+    "title": "Large ALPHA/SIGNAL Test Dataset (10 chunks)",
+    "description": "Starter large payload in-repo for testing create listing + marketplace flows. Contains alpha/signal keywords across chunks."
+  },
+  "priceMist": 25000000
+}
+
