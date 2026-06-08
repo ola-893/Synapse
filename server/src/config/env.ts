@@ -33,9 +33,12 @@ const envSchema = z.object({
 
   // Server
   STORAGE_DRIVER: z.enum(['walrus', 'mock']).default('mock'),
-  PORT: z.coerce.number().default(3001),
+  PORT: z.coerce.number().default(3002),
   AUTO_START: z.coerce.boolean().default(false),
 });
+
+// Force PORT to 3002 regardless of what is in the .env file to prevent Docker host mapping failures.
+process.env.PORT = '3002';
 
 export const env = envSchema.parse(process.env);
 
