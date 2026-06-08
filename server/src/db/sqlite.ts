@@ -1,19 +1,18 @@
 import sqlite3 from 'sqlite3';
 import { open, Database } from 'sqlite';
 import path from 'path';
+import fs from 'fs';
 import { encrypt, decrypt } from './encryption.ts';
 
-let db: Database | null = null;
+let db: Database;
 
 export async function initDB() {
   if (db) return db;
 
   const dbDir = path.join(process.cwd(), 'data');
-  import('fs').then(fs => {
-    if (!fs.existsSync(dbDir)) {
-      fs.mkdirSync(dbDir, { recursive: true });
-    }
-  });
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+  }
 
   db = await open({
     filename: path.join(dbDir, 'agents.db'),
