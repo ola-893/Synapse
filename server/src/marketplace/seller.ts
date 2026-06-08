@@ -6,8 +6,12 @@ import { suiClient, keypair } from '../config/sui.ts';
 import { v4 as uuidv4 } from 'uuid';
 import { ListingMetadata } from './types.ts';
 
+import crypto from 'crypto';
+import { bcs } from '@mysten/sui/bcs';
+
 export async function listDataset(chunks: string[], metadata: ListingMetadata, priceInMist: number): Promise<string> {
-  const listingId = uuidv4();
+  // Seal SDK requires the policy ID to be a valid 32-byte hex string (like a Sui Object ID)
+  const listingId = '0x' + crypto.randomBytes(32).toString('hex');
   const driver = getStorageDriver(env.STORAGE_DRIVER);
   const encryptedChunks: Uint8Array[] = [];
 
@@ -28,9 +32,9 @@ export async function listDataset(chunks: string[], metadata: ListingMetadata, p
   const policyBytes = new TextEncoder().encode(listingId);
 
   // Convert blob IDs to a nested vector format expected by Move
-  const blobIdsArg = tx.makeMoveVec({
-    elements: blobIdBytes.map(bytes => tx.pure.vector('u8', bytes))
-  });
+  const blobIdsArg = tx.pure(
+    bcs.vector(bcs.vector(bcs.u8())).serialize(blobIdBytes).toBytes()
+  );
 
   tx.moveCall({
     target: `${env.SYNAPSE_PACKAGE_ID}::marketplace::list_dataset`,

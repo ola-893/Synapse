@@ -14,11 +14,14 @@ let tickCount = 0;
 // The active owner connected via the dashboard
 let activeOwnerAddress: string | null = null;
 
+import { initializeKeypair } from '../config/sui.ts';
+
 export async function getActiveAgentKeypair(): Promise<Ed25519Keypair | null> {
   if (!activeOwnerAddress) return null;
   const wallet = await getAgentWallet(activeOwnerAddress);
   if (!wallet) return null;
-  return Ed25519Keypair.fromSecretKey(Buffer.from(wallet.privateKeyStr, 'hex'));
+  // Use initializeKeypair to properly parse the bech32 key string
+  return initializeKeypair(wallet.privateKeyStr);
 }
 
 /**
@@ -46,7 +49,7 @@ async function executeAgentTick() {
     const walletData = await getAgentWallet(activeOwnerAddress);
     if (!walletData) throw new Error('Agent wallet not found in database for owner');
     
-    const agentKeypair = Ed25519Keypair.fromSecretKey(Buffer.from(walletData.privateKeyStr, 'hex'));
+    const agentKeypair = initializeKeypair(walletData.privateKeyStr);
     const currentAgentAddress = walletData.agentAddress;
 
     // 1. RECALL context before execution
@@ -105,8 +108,8 @@ export async function registerAgent(config: { ownerPublicKey: string }): Promise
   const newKeypair = new Ed25519Keypair();
   const agentAddress = newKeypair.getPublicKey().toSuiAddress();
   
-  // Export the 32-byte secret key as a hex string
-  const privateKeyStr = Buffer.from(newKeypair.getSecretKey()).toString('hex');
+  // getSecretKey returns the bech32 format starting with suiprivkey1...
+  const privateKeyStr = newKeypair.getSecretKey();
   
   // Encrypt and save to DB
   await saveAgentWallet(config.ownerPublicKey, agentAddress, privateKeyStr);
