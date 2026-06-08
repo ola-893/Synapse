@@ -19,7 +19,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import type React from 'react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, type AgentStatus, type DatasetListing } from '../lib/api';
 import { buildDeactivateAgentTx, buildRegisterAgentTx, formatAddress, formatMist, getOwnedCapabilities } from '../lib/sui';
 
@@ -295,6 +295,28 @@ export function Agents() {
     onError: (error) => setTxResult(error.message),
   });
 
+  // Auto-reconnect returning users: if wallet is connected but backend has no active owner,
+  // automatically call /register to restore the existing wallet from SQLite.
+  const autoReconnected = useRef(false);
+  useEffect(() => {
+    if (
+      account &&
+      health.isSuccess &&
+      status.isSuccess &&
+      !status.data?.ownerAddress &&
+      !autoReconnected.current &&
+      !initBackendWallet.isPending
+    ) {
+      autoReconnected.current = true;
+      initBackendWallet.mutate();
+    }
+  }, [account, health.isSuccess, status.isSuccess, status.data?.ownerAddress]);
+
+  // Reset auto-reconnect when account changes
+  useEffect(() => {
+    autoReconnected.current = false;
+  }, [account?.address]);
+
   const agentAdminCap = caps.data?.agentAdminCaps[0]?.id;
   const activeOwnerMatchesWallet = Boolean(
     account &&
@@ -302,7 +324,7 @@ export function Agents() {
       status.data.ownerAddress.toLowerCase() === account.address.toLowerCase()
   );
   const backendRegistered = Boolean(status.data?.agentAddress && activeOwnerMatchesWallet);
-  const backendStatusLoading = status.isLoading || status.isFetching;
+  const backendStatusLoading = status.isLoading; // only show loading on initial fetch, not background refetches
 
   const hasDifferentActiveOwner = Boolean(account && status.data?.ownerAddress && !activeOwnerMatchesWallet);
   const startDisabled = start.isPending || !backendRegistered;
