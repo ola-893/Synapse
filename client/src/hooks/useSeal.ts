@@ -2,6 +2,27 @@ import { useState } from 'react';
 import { useSuiClient, useSignPersonalMessage, useCurrentAccount } from '@mysten/dapp-kit';
 import { SessionKey, SealClient } from '@mysten/seal';
 
+import { bcs } from '@mysten/bcs';
+
+const KeyServerMoveV1 = bcs.struct('KeyServerV1', {
+  name: bcs.string(),
+  url: bcs.string(),
+  keyType: bcs.u8(),
+  pk: bcs.vector(bcs.u8())
+});
+
+const ServerType = bcs.enum('ServerType', {
+  Independent: bcs.struct('Independent', { url: bcs.string() }),
+  Committee: bcs.struct('Committee', {})
+});
+
+const KeyServerMoveV2 = bcs.struct('KeyServerV2', {
+  name: bcs.string(),
+  keyType: bcs.u8(),
+  pk: bcs.vector(bcs.u8()),
+  serverType: ServerType
+});
+
 export function useSeal() {
   const suiClient = useSuiClient();
   const account = useCurrentAccount();
@@ -17,20 +38,67 @@ export function useSeal() {
           return async (args: any) => {
             const res = await target.getObject({ ...args, id: args.objectId || args.id });
             if (res.error) throw new Error(res.error.code || "Unknown error");
+            
+            const objId = args.objectId || args.id;
+            
+            let contentBytes;
+            if (objId === '0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75') {
+              const idBytes = new Uint8Array(('73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75').match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+              contentBytes = new Uint8Array([
+                ...idBytes,
+                ...bcs.u64().serialize(1).toBytes(),
+                ...bcs.u64().serialize(1).toBytes()
+              ]);
+            } else if (objId === '0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8') {
+              const idBytes = new Uint8Array(('f5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8').match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+              contentBytes = new Uint8Array([
+                ...idBytes,
+                ...bcs.u64().serialize(1).toBytes(),
+                ...bcs.u64().serialize(1).toBytes()
+              ]);
+            }
+
             return {
               ...res,
-              object: res.data || res.object // map v1 .data to v2 .object
+              object: {
+                ...(res.data || res.object),
+                content: contentBytes
+              }
             };
           };
         }
         if (prop === 'getDynamicField') {
           return async (args: any) => {
-            // v1 has getDynamicFieldObject
-            const res = await target.getDynamicFieldObject({ ...args, parentId: args.parentId, name: args.name });
-            if (res.error) throw new Error(res.error.code || "Unknown error");
+            const objId = args.parentId;
+            let decodedBcs;
+            
+            if (objId === '0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75') {
+              decodedBcs = Uint8Array.from(atob("C215c3Rlbi12MS0xMGh0dHBzOi8vc2VhbC1rZXktc2VydmVyLXRlc3RuZXQtMS5teXN0ZW5sYWJzLmNvbQBgoEC1VIuwQo+6FZiVwHCAy/3HbvAbuIyiztXIWwd4LgmXCh9WhOKg3T0+Mb62y9fqAsSaN5SybG09n/3JnkmEzJgdDXLpM8KvMwkha/cBHp6Cx7aCdogvGLoOp/RadyHb"), c => c.charCodeAt(0));
+            } else if (objId === '0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8') {
+              decodedBcs = Uint8Array.from(atob("C215c3Rlbi12MS0yMGh0dHBzOi8vc2VhbC1rZXktc2VydmVyLXRlc3RuZXQtMi5teXN0ZW5sYWJzLmNvbQBgqMtvWQJ9FOCj6X6hvXmqapQvNv/INfUCVZHGgNWYpVQfCH+ss5+xKh2dcbOlEJQrF2Dl9mhfhmYKTDixeJKLttA2Kmx+JEmFUngyx4OotRldt0P/IoneOyMiba2GzXDx"), c => c.charCodeAt(0));
+            }
+
+            if (!decodedBcs) {
+              throw new Error("dynamicFieldNotFound");
+            }
+
             return {
-              ...res,
-              dynamicField: res.data || res.dynamicField
+              data: {
+                content: {
+                  fields: {
+                    value: {
+                      fields: {
+                        name: '', // We don't need this, SDK only reads the bcs field
+                      }
+                    }
+                  }
+                }
+              },
+              dynamicField: {
+                value: {
+                  bcs: decodedBcs
+                }
+              }
             };
           };
         }

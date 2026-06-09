@@ -18,6 +18,7 @@ marketplaceRouter.post('/list', async (req, res) => {
     const listingId = await listDataset(blobIds, policyId, metadata, priceMist);
     res.json({ message: 'Dataset listed successfully', listingId });
   } catch (error: any) {
+    console.error('[Marketplace List Error]', error.stack || error);
     res.status(500).json({ error: error.message });
   }
 });

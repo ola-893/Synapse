@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import { formatMist } from '../lib/sui';
 import { useSeal } from '../hooks/useSeal';
 import { uploadToWalrus } from '../lib/walrus';
+import { useCurrentAccount, useSignPersonalMessage } from '@mysten/dapp-kit';
 
 async function readFileForBackend(file: File) {
   if (file.type.startsWith('text/') || file.name.match(/\.(csv|json|txt|md)$/i)) {
@@ -29,6 +30,8 @@ async function readFileForBackend(file: File) {
 }
 
 export default function SellData() {
+  const account = useCurrentAccount();
+  const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
   const queryClient = useQueryClient();
   const { encryptData } = useSeal();
   const [title, setTitle] = useState('');
@@ -65,7 +68,7 @@ export default function SellData() {
       setResult(`Listing published: ${data.listingId}`);
       await queryClient.invalidateQueries({ queryKey: ['marketplace-listings'] });
     },
-    onError: (error) => setResult(error.message),
+    onError: (error) => setResult(error.stack || error.message),
   });
 
   const totalListings = listings.data?.listings.filter((listing) => listing.isActive).length ?? 0;
