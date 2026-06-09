@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useSuiClient, useSignPersonalMessage, useCurrentAccount } from '@mysten/dapp-kit';
+import { SuiClient as V2SuiClient, getFullnodeUrl } from '@mysten/sui/client';
 import { SessionKey, SealClient } from '@mysten/seal';
 
 export function useSeal() {
@@ -11,17 +12,10 @@ export function useSeal() {
 
   // Initialize the Seal client
   const [sealClient] = useState(() => {
-    const coreProxy = new Proxy(suiClient as any, {
-      get(target, prop) {
-        if (prop === 'getObject') {
-          return async (args: any) => target.getObject({ ...args, id: args.objectId || args.id });
-        }
-        return target[prop];
-      }
-    });
+    const directV2Client = new V2SuiClient({ url: getFullnodeUrl('testnet') });
 
     return new SealClient({
-      suiClient: { core: coreProxy } as any,
+      suiClient: directV2Client as any,
       serverConfigs: [
         { objectId: '0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75', weight: 1 },
         { objectId: '0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8', weight: 1 }
