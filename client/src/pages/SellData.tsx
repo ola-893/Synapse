@@ -4,13 +4,8 @@ import { FileUp, ListPlus, RefreshCw, UploadCloud } from 'lucide-react';
 import { useState } from 'react';
 import { api } from '../lib/api';
 import { formatMist } from '../lib/sui';
-
-function splitIntoChunks(text: string) {
-  return text
-    .split('\n')
-    .map((chunk) => chunk.trim())
-    .filter(Boolean);
-}
+import { useSeal } from '../hooks/useSeal';
+import { uploadToWalrus } from '../lib/walrus';
 
 async function readFileForBackend(file: File) {
   if (file.type.startsWith('text/') || file.name.match(/\.(csv|json|txt|md)$/i)) {
@@ -35,6 +30,7 @@ async function readFileForBackend(file: File) {
 
 export default function SellData() {
   const queryClient = useQueryClient();
+  const { encryptData } = useSeal();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priceMist, setPriceMist] = useState<number | ''>('');
@@ -49,10 +45,21 @@ export default function SellData() {
   });
 
   const publish = useMutation({
-    mutationFn: () => {
-      const chunks = splitIntoChunks(datasetText);
-      if (!chunks.length) throw new Error('Add data before publishing.');
-      return api.listDataset(chunks, { title, description }, Number(priceMist));
+    mutationFn: async () => {
+      if (!datasetText.trim()) throw new Error('Add data before publishing.');
+      
+      // Generate a random 32-byte hex for the Seal policy ID
+      const policyIdBytes = crypto.getRandomValues(new Uint8Array(32));
+      const policyId = '0x' + Array.from(policyIdBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+
+      // 1. Encrypt directly in the browser
+      const encryptedBytes = await encryptData(datasetText, policyId);
+      
+      // 2. Upload to Walrus from the browser
+      const blobId = await uploadToWalrus(encryptedBytes);
+
+      // 3. Send IDs to backend to register the on-chain listing
+      return api.listDataset([blobId], policyId, { title, description }, Number(priceMist));
     },
     onSuccess: async (data) => {
       setResult(`Listing published: ${data.listingId}`);
@@ -163,7 +170,7 @@ export default function SellData() {
 
         <button
           onClick={() => publish.mutate()}
-          disabled={publish.isPending || !title.trim() || !description.trim() || !splitIntoChunks(datasetText).length || priceMist === '' || priceMist <= 0}
+          disabled={publish.isPending || !title.trim() || !description.trim() || !datasetText.trim() || priceMist === '' || priceMist <= 0}
           className="mt-4 w-full rounded-lg bg-tertiary px-4 py-3 font-semibold text-white disabled:opacity-50"
         >
           <UploadCloud className="mr-2 inline h-4 w-4" />

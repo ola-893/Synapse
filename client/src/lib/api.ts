@@ -108,10 +108,10 @@ export const api = {
 
   listings: () => request<{ listings: DatasetListing[] }>('/api/marketplace/listings'),
   listing: (id: string) => request<{ listing: DatasetListing }>(`/api/marketplace/listings/${id}`),
-  listDataset: (chunks: string[], metadata: { title: string; description: string }, priceMist: number) =>
+  listDataset: (blobIds: string[], policyId: string, metadata: { title: string; description: string }, priceMist: number) =>
     request<{ message: string; listingId: string }>('/api/marketplace/list', {
       method: 'POST',
-      body: JSON.stringify({ chunks, metadata, priceMist }),
+      body: JSON.stringify({ blobIds, policyId, metadata, priceMist }),
     }),
   purchaseDataset: (id: string) =>
     request<{ message: string; receiptId: string }>(`/api/marketplace/purchase/${id}`, {

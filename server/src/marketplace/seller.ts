@@ -1,35 +1,15 @@
-import { getStorageDriver } from '../walrus/driver.ts';
-import { sealEncrypt } from '../seal/encrypt.ts';
 import { env } from '../config/env.ts';
 import { Transaction } from '@mysten/sui/transactions';
 import { suiClient, keypair } from '../config/sui.ts';
-import { v4 as uuidv4 } from 'uuid';
 import { ListingMetadata } from './types.ts';
-
-import crypto from 'crypto';
 import { bcs } from '@mysten/sui/bcs';
 
-export async function listDataset(chunks: string[], metadata: ListingMetadata, priceInMist: number): Promise<string> {
-  // Seal SDK requires the policy ID to be a valid 32-byte hex string (like a Sui Object ID)
-  const listingId = '0x' + crypto.randomBytes(32).toString('hex');
-  const driver = getStorageDriver(env.STORAGE_DRIVER);
-  const encryptedChunks: Uint8Array[] = [];
-
-  // 1. Encrypt each chunk using Seal
-  for (const chunk of chunks) {
-    const encryptedBytes = await sealEncrypt(chunk, listingId);
-    encryptedChunks.push(encryptedBytes);
-  }
-
-  // 2. Upload to Walrus via Driver
-  const blobIds = await driver.uploadBatch(encryptedChunks);
+export async function listDataset(blobIds: string[], policyId: string, metadata: ListingMetadata, priceInMist: number): Promise<string> {
   const blobIdBytes = blobIds.map(id => Array.from(new TextEncoder().encode(id)));
 
-  // 3. Register on-chain
+  // Register on-chain
   const tx = new Transaction();
-  const titleBytes = new TextEncoder().encode(metadata.title);
-  const descBytes = new TextEncoder().encode(metadata.description);
-  const policyBytes = new TextEncoder().encode(listingId);
+  const policyBytes = Buffer.from(policyId.replace('0x', ''), 'hex');
 
   // Convert blob IDs to a nested vector format expected by Move
   const blobIdsArg = tx.pure(
@@ -43,7 +23,7 @@ export async function listDataset(chunks: string[], metadata: ListingMetadata, p
       tx.pure.string(metadata.description),
       tx.pure.u64(priceInMist),
       blobIdsArg,
-      tx.pure.u64(chunks.length),
+      tx.pure.u64(blobIds.length),
       tx.pure.vector('u8', policyBytes),
       tx.object('0x6'), // Clock object
     ]

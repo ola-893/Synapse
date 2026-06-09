@@ -11,11 +11,11 @@ export const marketplaceRouter = Router();
 // Seller Routes
 marketplaceRouter.post('/list', async (req, res) => {
   try {
-    const { chunks, metadata, priceMist } = req.body;
-    if (!chunks || !metadata || typeof priceMist !== 'number') {
-      return res.status(400).json({ error: 'Missing chunks, metadata, or priceMist' });
+    const { blobIds, policyId, metadata, priceMist } = req.body;
+    if (!blobIds || !policyId || !metadata || typeof priceMist !== 'number') {
+      return res.status(400).json({ error: 'Missing blobIds, policyId, metadata, or priceMist' });
     }
-    const listingId = await listDataset(chunks, metadata, priceMist);
+    const listingId = await listDataset(blobIds, policyId, metadata, priceMist);
     res.json({ message: 'Dataset listed successfully', listingId });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
