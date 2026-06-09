@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useSuiClient, useSignPersonalMessage, useCurrentAccount } from '@mysten/dapp-kit';
-import { SuiClient as V2SuiClient, getFullnodeUrl } from '@mysten/sui/client';
 import { SessionKey, SealClient } from '@mysten/seal';
 
 export function useSeal() {
@@ -12,10 +11,35 @@ export function useSeal() {
 
   // Initialize the Seal client
   const [sealClient] = useState(() => {
-    const directV2Client = new V2SuiClient({ url: getFullnodeUrl('testnet') });
+    const coreProxy = new Proxy(suiClient as any, {
+      get(target, prop) {
+        if (prop === 'getObject') {
+          return async (args: any) => {
+            const res = await target.getObject({ ...args, id: args.objectId || args.id });
+            if (res.error) throw new Error(res.error.code || "Unknown error");
+            return {
+              ...res,
+              object: res.data || res.object // map v1 .data to v2 .object
+            };
+          };
+        }
+        if (prop === 'getDynamicField') {
+          return async (args: any) => {
+            // v1 has getDynamicFieldObject
+            const res = await target.getDynamicFieldObject({ ...args, parentId: args.parentId, name: args.name });
+            if (res.error) throw new Error(res.error.code || "Unknown error");
+            return {
+              ...res,
+              dynamicField: res.data || res.dynamicField
+            };
+          };
+        }
+        return target[prop];
+      }
+    });
 
     return new SealClient({
-      suiClient: directV2Client as any,
+      suiClient: { core: coreProxy } as any,
       serverConfigs: [
         { objectId: '0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75', weight: 1 },
         { objectId: '0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8', weight: 1 }
