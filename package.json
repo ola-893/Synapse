@@ -10,5 +10,9 @@
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "motion": "^12.40.0",
+    "typescript": "^6.0.3"
   }
 }

@@ -1,25 +1,36 @@
-
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileUp, ListPlus, RefreshCw, UploadCloud } from 'lucide-react';
-import { useState } from 'react';
+import React, { useState } from 'react';
+import {
+  ShieldAlert,
+  Layers,
+  RefreshCw,
+  CheckCircle,
+  Database,
+  HelpCircle,
+  FileUp,
+  Loader2,
+} from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCurrentAccount } from '@mysten/dapp-kit';
 import { api } from '../lib/api';
 import { formatMist } from '../lib/sui';
 import { useSeal } from '../hooks/useSeal';
 import { uploadToWalrus } from '../lib/walrus';
-import { useCurrentAccount, useSignPersonalMessage } from '@mysten/dapp-kit';
+import { useToast } from '../components/Toast';
 
-async function readFileForBackend(file: File) {
+interface SellDataLegacyProps {
+  onSuccess: () => void;
+}
+
+async function readFileForBackend(file: File): Promise<string> {
   if (file.type.startsWith('text/') || file.name.match(/\.(csv|json|txt|md)$/i)) {
     return file.text();
   }
-
   const bytes = new Uint8Array(await file.arrayBuffer());
   const chunkSize = 0x8000;
   let binary = '';
   for (let i = 0; i < bytes.length; i += chunkSize) {
     binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
   }
-
   return JSON.stringify({
     name: file.name,
     type: file.type || 'application/octet-stream',
@@ -29,163 +40,467 @@ async function readFileForBackend(file: File) {
   });
 }
 
-export default function SellData() {
+const PRESETS = [
+  {
+    title: 'Neuro-Anatomy_fMRI_Volumetric_Metrics',
+    price: 9.5,
+    description:
+      'Multi-voxel pattern analysis coordinates tracking blood-oxygen-level-dependent signaling responses mapped inside cortical vision centers.',
+    content:
+      'VOX_ID,TIME_MS,BOLD_Z_SCORE,REGION_MUTATION\nVX_0110,120,2.152,V1_Primary_Visual\nVX_0112,240,1.801,V2_Cortical_Depth\nVX_0114,360,-0.412,V4_Color_Vector\nVX_0116,480,3.004,V1_Primary_Visual',
+  },
+  {
+    title: 'Solar-Wind_Magnetosphere_Flux_Grids',
+    price: 6.2,
+    description:
+      'High-latitude magnetometer sensor reports measuring magnetic vector flux anomalies and coronal mass ejection impacts at 1-second grain.',
+    content:
+      'SAMP_UTC,FLUX_NT,VECTOR_DEG,INTEGRITY_INDEX\n1781084221,412.5,12.502,0.992\n1781084222,410.1,12.504,0.992\n1781084223,409.8,12.511,0.994\n1781084224,414.2,12.499,0.991',
+  },
+  {
+    title: 'Meltwater_Salinity_Vertical_Profile_Q2',
+    price: 3.8,
+    description:
+      'Continuous probe recordings tracking salinity percentage, isotopic oxygen values, and conductive temperature depth from Antarctic glaciers.',
+    content:
+      'DEPTH_M,SALINITY_PPT,TEMP_C,O18_RATIO\n2.0,34.12,-1.45,-0.0212\n5.0,34.11,-1.44,-0.0210\n10.0,34.08,-1.40,-0.0205\n20.0,33.95,-1.31,-0.0198',
+  },
+];
+
+export default function SellDataLegacy({ onSuccess }: SellDataLegacyProps) {
   const account = useCurrentAccount();
-  const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
-  const queryClient = useQueryClient();
   const { encryptData } = useSeal();
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  // ─── Form state ─────────────────────────────────────────────
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [priceMist, setPriceMist] = useState<number | ''>('');
+  const [priceSui, setPriceSui] = useState('');
   const [datasetText, setDatasetText] = useState('');
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
-  const [result, setResult] = useState<string | null>(null);
 
+  // ─── UI state ───────────────────────────────────────────────
+  const [statusStep, setStatusStep] = useState(0);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [blobId, setBlobId] = useState('');
+  const [isPublishing, setIsPublishing] = useState(false);
+
+  // ─── Queries ────────────────────────────────────────────────
   const listings = useQuery({
     queryKey: ['marketplace-listings'],
     queryFn: api.listings,
     refetchInterval: 15000,
   });
 
-  const publish = useMutation({
-    mutationFn: async () => {
-      if (!datasetText.trim()) throw new Error('Add data before publishing.');
-      
-      // Generate a random 32-byte hex for the Seal policy ID
+  const totalListings = listings.data?.listings.filter((l) => l.isActive).length ?? 0;
+
+  // ─── Handlers ───────────────────────────────────────────────
+  const handleApplyPreset = (idx: number) => {
+    const p = PRESETS[idx];
+    setTitle(p.title);
+    setPriceSui(p.price.toString());
+    setDescription(p.description);
+    setDatasetText(p.content);
+    setSelectedFileName(null);
+    setErrorMsg('');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+
+    if (!title.trim()) return setErrorMsg('Dataset title is required.');
+    if (!description.trim() || description.length < 20)
+      return setErrorMsg('Description must be at least 20 characters.');
+    if (!datasetText.trim()) return setErrorMsg('Provide dataset content to encrypt.');
+    const priceNum = parseFloat(priceSui);
+    if (Number.isNaN(priceNum) || priceNum <= 0) return setErrorMsg('Price must be a valid positive number.');
+
+    try {
+      setIsPublishing(true);
+      // Step 1: Generate random 32-byte Seal policy ID
+      setStatusStep(1);
       const policyIdBytes = crypto.getRandomValues(new Uint8Array(32));
-      const policyId = '0x' + Array.from(policyIdBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+      const policyId =
+        '0x' + Array.from(policyIdBytes).map((b) => b.toString(16).padStart(2, '0')).join('');
 
-      // 1. Encrypt directly in the browser
+      // Step 2: Encrypt in browser via Seal
+      setStatusStep(2);
       const encryptedBytes = await encryptData(datasetText, policyId);
-      
-      // 2. Upload to Walrus from the browser
-      const blobId = await uploadToWalrus(encryptedBytes);
 
-      // 3. Send IDs to backend to register the on-chain listing
-      return api.listDataset([blobId], policyId, { title, description }, Number(priceMist));
-    },
-    onSuccess: async (data) => {
-      setResult(`Listing published: ${data.listingId}`);
+      // Step 3: Upload to Walrus from browser
+      setStatusStep(3);
+      const uploadedBlobId = await uploadToWalrus(encryptedBytes);
+      setBlobId(uploadedBlobId);
+
+      // Step 4: Register on-chain listing via backend
+      setStatusStep(4);
+      const priceMist = Math.round(priceNum * 1_000_000_000);
+      await api.listDataset([uploadedBlobId], policyId, { title, description }, priceMist);
+
+      // Step 5: Done — reset
+      setStatusStep(5);
+      toast.success(`"${title}" published to marketplace — encrypted & listed on-chain.`);
+      setTitle('');
+      setDescription('');
+      setPriceSui('');
+      setDatasetText('');
+      setSelectedFileName(null);
+      setBlobId('');
+      setStatusStep(0);
+      setIsPublishing(false);
       await queryClient.invalidateQueries({ queryKey: ['marketplace-listings'] });
-    },
-    onError: (error) => setResult(error.stack || error.message),
-  });
+      onSuccess();
+    } catch (err: any) {
+      console.error(err);
+      const msg = err?.message || 'Listing failed.';
+      setErrorMsg(msg);
+      toast.error(msg);
+      setStatusStep(0);
+      setIsPublishing(false);
+    }
+  };
 
-  const totalListings = listings.data?.listings.filter((listing) => listing.isActive).length ?? 0;
-
-  return (
-    <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto w-full">
-      <div className="mb-8 flex flex-col items-start justify-between gap-6 xl:flex-row">
-        <div>
-          <p className="mb-3 text-xs font-mono uppercase tracking-widest text-outline">Seller workspace</p>
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-on-surface mb-3">Sell Data</h1>
-          <p className="text-lg text-on-surface-variant max-w-2xl leading-relaxed">
-            Add the data you want to sell, set a price, and publish. The backend encrypts the data with Seal, uploads it to
-            Walrus, and creates the marketplace listing.
+  // ─── Wallet disconnected guard ──────────────────────────────
+  if (!account) {
+    return (
+      <div className="max-w-6xl mx-auto py-4 px-2 font-sans selection:bg-[#111312] selection:text-white">
+        <div className="border-b-2 border-[#111312] pb-5 mb-8">
+          <span className="font-mono text-xs text-zinc-650 uppercase tracking-widest block font-bold">
+            [ MODULE 02 // SELL & ENCRYPT PORTAL ]
+          </span>
+          <h1 className="text-3xl font-black tracking-tight text-[#111312] uppercase mt-1">
+            Wallet Required
+          </h1>
+        </div>
+        <div className="bg-white border-2 border-[#111312] p-8 shadow-md text-center">
+          <FileUp className="w-10 h-10 text-zinc-400 mx-auto mb-4" />
+          <p className="font-mono text-xs text-zinc-600 uppercase tracking-widest font-black mb-2">
+            NO SUI WALLET DETECTED
+          </p>
+          <p className="text-sm text-zinc-500 font-serif italic max-w-md mx-auto">
+            Connect your Sui wallet using the button in the top-right corner to encrypt and publish datasets.
           </p>
         </div>
-        <button
-          onClick={() => listings.refetch()}
-          className="rounded-lg border border-outline-variant bg-surface-dim px-4 py-3 font-semibold flex items-center gap-2"
-        >
-          <RefreshCw className="w-4 h-4" /> Refresh
-        </button>
+      </div>
+    );
+  }
+
+  // ─── Render ─────────────────────────────────────────────────
+  return (
+    <div className="max-w-6xl mx-auto py-4 px-2 font-sans selection:bg-[#111312] selection:text-white">
+      {/* Header */}
+      <div className="border-b-2 border-[#111312] pb-5 mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+        <div>
+          <span className="font-mono text-xs text-zinc-600 uppercase tracking-widest block font-bold">
+            [ MODULE 02 // SELL & ENCRYPT PORTAL ]
+          </span>
+          <h1 className="text-3xl font-black tracking-tight text-[#111312] uppercase mt-1">
+            Publish Encrypted Listing
+          </h1>
+          <p className="text-sm text-zinc-600 mt-2 max-w-2xl font-serif leading-relaxed italic">
+            Add the data you want to sell, set a price, and publish. Data is encrypted in-browser with Seal, uploaded
+            to Walrus, and the listing is registered on-chain.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="bg-white border-2 border-[#111312] px-3 py-1.5 text-[10px] font-mono text-[#111312] font-black uppercase shadow-sm">
+            {totalListings} ACTIVE LISTINGS
+          </div>
+          <button
+            onClick={() => listings.refetch()}
+            className="bg-white border-2 border-[#111312] px-3 py-1.5 text-[10px] font-mono text-[#111312] font-black uppercase shadow-sm flex items-center gap-1.5 hover:bg-[#EAEFEC] transition-colors cursor-pointer"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${listings.isFetching ? 'animate-spin' : ''}`} />
+            REFRESH
+          </button>
+        </div>
       </div>
 
-      <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="rounded-lg border border-outline-variant bg-surface-dim p-5">
-          <p className="text-xs font-mono uppercase tracking-widest text-outline">Active listings</p>
-          <p className="mt-3 text-3xl font-bold">{totalListings}</p>
-          <p className="mt-2 text-sm text-on-surface-variant">Datasets currently visible in the marketplace.</p>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* ── Main form ── */}
+        <div className="lg:col-span-8 bg-white border-2 border-[#111312] p-6 sm:p-8 relative shadow-md">
+          <div className="absolute top-4 right-4 text-[8px] font-mono text-zinc-500 uppercase font-black tracking-wider">
+            [ SECURE SANDBOXED WRAPPER ]
+          </div>
+
+          {errorMsg ? (
+            <div className="mb-6 bg-red-100 border-2 border-red-800 text-red-900 p-4 text-xs font-mono flex items-start space-x-3 font-bold">
+              <ShieldAlert className="w-4 h-4 mt-0.5 text-red-700 flex-shrink-0" />
+              <div>
+                <strong>LISTING ERROR:</strong>
+                <p className="mt-1 font-medium">{errorMsg}</p>
+              </div>
+            </div>
+          ) : null}
+
+          {statusStep > 0 ? (
+            /* ── Step animation ── */
+            <div className="py-12 flex flex-col justify-center items-center text-center space-y-8">
+              <div className="relative">
+                <div className="w-16 h-16 rounded-none border-2 border-[#111312]/20 border-t-[#111312] animate-spin" />
+                <Database className="w-6 h-6 text-[#111312] absolute inset-0 m-auto animate-pulse" />
+              </div>
+
+              <div className="space-y-3 max-w-md">
+                <h3 className="text-md font-mono text-zinc-900 tracking-widest uppercase font-black">
+                  {statusStep === 1 && 'SEAL_POLICY_GENERATION'}
+                  {statusStep === 2 && 'CRYPTOGRAPHIC_ENCRYPTION_ACTIVE'}
+                  {statusStep === 3 && 'WALRUS_MUTABLE_BLOB_COMMIT'}
+                  {statusStep === 4 && 'SUI_LEDGER_BROADCAST_PUBLISH'}
+                  {statusStep === 5 && 'SYNAPSE_LEDGER_SUCCESS'}
+                </h3>
+                <p className="text-xs text-zinc-600 leading-relaxed font-serif italic">
+                  {statusStep === 1 && 'Generating random 32-byte Seal policy ID...'}
+                  {statusStep === 2 && 'Encrypting data in-browser via Seal threshold cryptography...'}
+                  {statusStep === 3 && 'Uploading encrypted payload to Walrus decentralized storage...'}
+                  {statusStep === 4 && 'Registering listing on Sui Devnet via backend...'}
+                  {statusStep === 5 && 'Listing published successfully!'}
+                </p>
+              </div>
+
+              <div className="w-full max-w-xs grid grid-cols-5 gap-1.5">
+                {[1, 2, 3, 4, 5].map((step) => (
+                  <div
+                    key={step}
+                    className={`h-2 transition-colors duration-300 ${
+                      statusStep >= step ? 'bg-black' : 'bg-zinc-200'
+                    }`}
+                  />
+                ))}
+              </div>
+
+              <div className="text-zinc-700 font-mono text-[9px] tracking-widest bg-[#EAEFEC] px-3 py-1.5 border border-zinc-300">
+                BLOB: {blobId || '[ ALLOCATING_IMMUTABLE_HASH_ADDRESS ]'}
+              </div>
+            </div>
+          ) : (
+            /* ── Form ── */
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Title + Price */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-xs font-mono text-zinc-500 uppercase tracking-wider mb-2 font-black">
+                    Dataset Title
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={80}
+                    placeholder="e.g. Neuro-Anatomy_fMRI_Volumetric_Metrics"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    className="w-full bg-[#EAEFEC] border-2 border-[#111312] focus:bg-white focus:border-[#111312] p-3 text-sm text-[#111312] font-mono rounded-none focus:outline-none transition-colors font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono text-zinc-500 uppercase tracking-wider mb-2 font-black">
+                    Price (SUI)
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    required
+                    placeholder="e.g. 0.0001, 0.01, 1.5, 5.0"
+                    value={priceSui}
+                    onChange={(e) => setPriceSui(e.target.value)}
+                    className="w-full bg-[#EAEFEC] border-2 border-[#111312] p-3 text-sm text-[#111312] font-mono rounded-none focus:outline-none font-bold"
+                  />
+                  {priceSui && !isNaN(parseFloat(priceSui)) && parseFloat(priceSui) > 0 && (() => {
+                    const mist = Math.round(parseFloat(priceSui) * 1_000_000_000);
+                    if (mist === 0) {
+                      return (
+                        <span className="text-[9px] font-mono text-amber-700 mt-1 block font-bold bg-amber-50 border border-amber-300 px-2 py-1">
+                          ⚠ Price too low — rounds to 0 MIST. Minimum is ~0.000000001 SUI (1 MIST).
+                        </span>
+                      );
+                    }
+                    return (
+                      <span className="text-[9px] font-mono text-zinc-500 mt-1 block font-bold">
+                        = {formatMist(mist)} (MIST)
+                      </span>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-xs font-mono text-zinc-500 uppercase tracking-wider mb-2 font-black">
+                  Marketplace Metadata Description
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  maxLength={500}
+                  placeholder="Summarize what agents will find in this dataset..."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="w-full bg-[#EAEFEC] border-2 border-[#111312] p-3 text-sm text-[#111312] font-serif rounded-none focus:outline-none leading-relaxed italic"
+                />
+                <span className="text-[9px] text-zinc-500 font-mono mt-1 block font-bold">
+                  ({description.length} / 500 characters)
+                </span>
+              </div>
+
+              {/* File upload */}
+              <div className="border-t border-[#111312]/15 pt-6">
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-xs font-mono text-zinc-500 uppercase tracking-wider font-extrabold flex items-center">
+                    <FileUp className="w-3.5 h-3.5 mr-1.5" />
+                    Dataset Content
+                  </label>
+                  {selectedFileName && (
+                    <span className="text-[9px] text-zinc-500 font-mono font-bold">{selectedFileName}</span>
+                  )}
+                </div>
+
+                <div className="mb-3 rounded-lg border-2 border-dashed border-[#111312]/30 bg-[#EAEFEC] p-4 hover:border-[#111312] transition-colors">
+                  <label className="flex cursor-pointer flex-col items-center justify-center text-center">
+                    <FileUp className="mb-2 h-5 w-5 text-zinc-500" />
+                    <span className="text-[10px] font-mono text-zinc-600 uppercase font-bold">
+                      {selectedFileName ?? 'Choose a CSV, JSON, TXT, MD file or paste below'}
+                    </span>
+                    <span className="mt-1 text-[9px] text-zinc-400 font-mono">
+                      Text files loaded directly. Binary files packaged before encryption.
+                    </span>
+                    <input
+                      type="file"
+                      className="sr-only"
+                      accept=".pdf,.json,.csv,.txt,.md,application/pdf,application/json,text/csv,text/plain,text/markdown"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (!file) return;
+                        setSelectedFileName(file.name);
+                        readFileForBackend(file)
+                          .then(setDatasetText)
+                          .catch(() => setErrorMsg('Failed to read file.'));
+                      }}
+                    />
+                  </label>
+                </div>
+
+                <textarea
+                  required
+                  rows={5}
+                  placeholder="VOX_ID,TIME_MS,BOLD_Z_SCORE... (or paste file content above)"
+                  value={datasetText}
+                  onChange={(e) => setDatasetText(e.target.value)}
+                  className="w-full bg-[#111312] border-2 border-[#111312] p-3 text-xs text-emerald-400 font-mono rounded-none focus:outline-none leading-relaxed"
+                />
+                <span className="text-[9px] text-zinc-500 font-mono mt-1 block font-bold">
+                  ({datasetText.length} bytes)
+                </span>
+              </div>
+
+              {/* Encryption info bar */}
+              <div className="bg-[#EAEFEC] border border-[#111312]/20 p-4 flex items-center gap-3">
+                <CheckCircle className="w-4 h-4 text-emerald-800 flex-shrink-0" />
+                <div>
+                  <span className="text-[10px] font-mono text-zinc-800 font-black uppercase block">
+                    Client-side Seal encryption active — keys never leave the browser
+                  </span>
+                  <p className="text-[9px] text-zinc-500 font-serif italic mt-0.5">
+                    A random 32-byte policy ID is generated per listing. Encrypted payload uploads to Walrus; only
+                    metadata is indexed on-chain.
+                  </p>
+                </div>
+              </div>
+
+              {/* Submit */}
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  disabled={
+                    isPublishing ||
+                    !title.trim() ||
+                    !description.trim() ||
+                    !datasetText.trim() ||
+                    priceSui === '' ||
+                    parseFloat(priceSui) <= 0
+                  }
+                  className="w-full md:w-auto bg-[#111312] hover:bg-white text-white hover:text-[#111312] border-2 border-[#111312] px-8 py-4 font-extrabold tracking-widest text-xs uppercase duration-300 shadow-md cursor-pointer select-none disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isPublishing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Encrypting & Publishing...
+                    </>
+                  ) : (
+                    'Encrypt & Publish Listing'
+                  )}
+                </button>
+              </div>
+            </form>
+          )}
         </div>
-        <div className="rounded-lg border border-outline-variant bg-surface-dim p-5">
-          <p className="text-xs font-mono uppercase tracking-widest text-outline">Your price</p>
-          <p className="mt-3 text-3xl font-bold">{priceMist !== '' ? formatMist(priceMist) : '-'}</p>
-          <p className="mt-2 text-sm text-on-surface-variant">Agents pay this amount when they buy the listing.</p>
-        </div>
-        <div className="rounded-lg border border-outline-variant bg-surface-dim p-5">
-          <p className="text-xs font-mono uppercase tracking-widest text-outline">Backend handles</p>
-          <p className="mt-3 text-lg font-bold">Encryption + storage</p>
-          <p className="mt-2 text-sm text-on-surface-variant">No storage ID or Seal policy ID is needed from you.</p>
+
+        {/* ── Sidebar ── */}
+        <div className="lg:col-span-4 space-y-6">
+          {/* Presets */}
+          {/* <div className="bg-white border-2 border-[#111312] p-6 relative shadow-md">
+            <h3 className="text-xs font-mono text-[#111312] uppercase tracking-widest mb-4 flex items-center font-black">
+              <Layers className="w-4 h-4 mr-2" />
+              Dataset Presets (Fast Load)
+            </h3>
+            <p className="text-xs text-zinc-600 mb-4 font-serif italic leading-relaxed">
+              Click any preset to fill the form with sample data.
+            </p>
+            <div className="space-y-3">
+              {PRESETS.map((preset, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => handleApplyPreset(idx)}
+                  className="p-3 bg-[#EAEFEC] hover:bg-[#111312] border border-[#111312]/30 hover:border-[#111312] transition-all cursor-pointer group"
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="font-mono text-xs text-[#111312] group-hover:text-white font-bold truncate max-w-[180px]">
+                      {preset.title}
+                    </span>
+                    <span className="font-mono text-[9px] bg-white group-hover:bg-[#EAEFEC] text-zinc-800 border border-[#111312]/30 px-1.5 py-0.5 font-black uppercase">
+                      {preset.price} SUI
+                    </span>
+                  </div>
+                  <div className="text-[9px] text-zinc-500 group-hover:text-zinc-350 mt-1 truncate font-serif italic">
+                    {preset.description.substring(0, 60)}...
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div> */}
+
+          {/* Flow info */}
+          <div className="bg-white border-2 border-[#111312]/90 p-6 space-y-4">
+            <h3 className="text-xs font-mono text-[#111312] uppercase tracking-widest flex items-center font-black">
+              <HelpCircle className="w-4 h-4 mr-2" />
+              How It Works
+            </h3>
+            <div className="space-y-4 text-xs font-serif leading-relaxed italic text-zinc-600">
+              <div>
+                <strong className="text-[#111312] block font-sans not-italic font-black text-xs uppercase mb-1">
+                  1. Seal Encryption
+                </strong>
+                <p>Data is encrypted in your browser using threshold cryptography. No plaintext ever reaches a server.</p>
+              </div>
+              <div>
+                <strong className="text-[#111312] block font-sans not-italic font-black text-xs uppercase mb-1">
+                  2. Walrus Upload
+                </strong>
+                <p>Encrypted payload is uploaded to Walrus decentralized storage. Only the blob ID is stored on-chain.</p>
+              </div>
+              <div>
+                <strong className="text-[#111312] block font-sans not-italic font-black text-xs uppercase mb-1">
+                  3. On-Chain Listing
+                </strong>
+                <p>Backend registers your listing on Sui Testnet. Agents can discover and purchase it.</p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-
-      <section className="bg-surface-dim border border-outline-variant rounded-lg p-6">
-        <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-          <ListPlus className="w-5 h-5 text-primary" /> Create Listing
-        </h2>
-
-        <div className="mb-4 rounded-lg border border-dashed border-outline-variant bg-surface p-4">
-          <label className="flex cursor-pointer flex-col items-center justify-center text-center">
-            <FileUp className="mb-2 h-6 w-6 text-primary" />
-            <span className="text-sm font-semibold">
-              {selectedFileName ?? 'Choose a CSV, JSON, TXT, PDF, or paste data below'}
-            </span>
-            <span className="mt-1 text-xs text-outline">
-              Text files are loaded directly. Binary files are packaged before backend encryption.
-            </span>
-            <input
-              type="file"
-              className="sr-only"
-              accept=".pdf,.json,.csv,.txt,.md,application/pdf,application/json,text/csv,text/plain,text/markdown"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (!file) return;
-                setSelectedFileName(file.name);
-                readFileForBackend(file)
-                  .then(setDatasetText)
-                  .catch((error) => setResult(error.message));
-              }}
-            />
-          </label>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <input
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            className="rounded-lg border border-outline-variant bg-surface px-4 py-3 text-sm"
-            placeholder="e.g. DeFi Trading Signals — Q3 2026"
-          />
-          <input
-            value={priceMist}
-            onChange={(event) => {
-              const val = event.target.value;
-              setPriceMist(val === '' ? '' : Number(val));
-            }}
-            type="number"
-            className="rounded-lg border border-outline-variant bg-surface px-4 py-3 text-sm"
-            placeholder="e.g. 5000000"
-          />
-        </div>
-        <textarea
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-          className="mt-3 h-20 w-full resize-none rounded-lg border border-outline-variant bg-surface p-4 text-sm"
-          placeholder="e.g. Backtested market signals across 12 SUI DEX pools with 83% accuracy"
-        />
-        <textarea
-          value={datasetText}
-          onChange={(event) => setDatasetText(event.target.value)}
-          className="mt-3 h-44 w-full resize-y rounded-lg border border-outline-variant bg-surface p-4 text-sm"
-          placeholder="Data to sell. Each line becomes a backend chunk."
-        />
-
-        <button
-          onClick={() => publish.mutate()}
-          disabled={publish.isPending || !title.trim() || !description.trim() || !datasetText.trim() || priceMist === '' || priceMist <= 0}
-          className="mt-4 w-full rounded-lg bg-tertiary px-4 py-3 font-semibold text-white disabled:opacity-50"
-        >
-          <UploadCloud className="mr-2 inline h-4 w-4" />
-          {publish.isPending ? 'Publishing...' : 'Publish Listing'}
-        </button>
-      </section>
-
-      {result ? (
-        <pre className="mt-6 max-h-40 overflow-auto rounded-lg border border-outline-variant bg-surface-dim p-3 text-xs">
-          {JSON.stringify({ result }, null, 2)}
-        </pre>
-      ) : null}
     </div>
   );
 }
