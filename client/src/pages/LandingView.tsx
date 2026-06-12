@@ -1,7 +1,7 @@
 import { ArrowRight, ChevronRight, Video, Eclipse } from 'lucide-react';
 
 
-import { motion } from "motion/react"
+import { motion } from "framer-motion"
 import { ConnectButton } from '@mysten/dapp-kit';
 
 

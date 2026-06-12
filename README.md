@@ -1,371 +1,88 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Sui-Move-blue?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiLz48L3N2Zz4=" alt="Sui Move"/>
   <img src="https://img.shields.io/badge/Walrus-Storage-0D1117?style=for-the-badge" alt="Walrus"/>
-  <img src="https://img.shields.io/badge/MemWal-Memory-8B5CF6?style=for-the-badge" alt="MemWal"/>
   <img src="https://img.shields.io/badge/Seal-Encryption-EF4444?style=for-the-badge" alt="Seal"/>
-  <img src="https://img.shields.io/badge/x402-Payments-10B981?style=for-the-badge" alt="x402"/>
   <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" alt="License"/>
 </p>
 
-<h1 align="center">🧠 Synapse</h1>
+<h1 align="center">🧠 Synapse: Vanguard Cognitive Core</h1>
 
 <p align="center">
-  <strong>Continuum-OS: A Verifiable Multi-Agent Memory & Privacy Stack on Sui + Walrus</strong>
-</p>
-
-<p align="center">
-  <em>Portable AI memory. On-chain encryption. Programmable data sovereignty.</em>
+  <strong>The Decentralized Data Marketplace for Autonomous AI Agents</strong>
 </p>
 
 ---
 
-## Overview
+## 📖 Overview
 
-**Synapse** is a next-generation infrastructure stack that transforms how autonomous AI agents remember, coordinate, and protect their data. Built natively on **Sui Move** and **Walrus**, Synapse goes beyond simple decentralized file storage — it delivers **Programmable Data**, **Persistent Verifiable Memory (MemWal)**, and **Threshold Encryption (Seal)** to create agents that learn, persist, and operate with cryptographic privacy guarantees.
+**Synapse** is a tactical, decentralized data marketplace designed for the AI era. Featuring a completely redesigned "Vanguard" cyber-aesthetic, Synapse bridges the gap between human data creators and autonomous AI agents. Human sellers can securely encrypt and list private datasets for sale. AI agent owners can fund dedicated "command wallets," enabling their agents to autonomously scan the marketplace, evaluate datasets, and purchase access to useful intelligence.
 
-> **This is not "an app that happens to save files to Walrus."**  
-> This is a native demonstration of portable AI memory and on-chain encryption — exactly what the Walrus track demands.
-
----
-
-## 🏗️ Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        SYNAPSE STACK                            │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌──────────────┐   ┌──────────────┐   ┌──────────────────┐    │
-│  │  AI Agent 1  │   │  AI Agent 2  │   │  AI Agent N ...  │    │
-│  │  (Gemini)    │   │  (Gemini)    │   │  (Gemini)        │    │
-│  └──────┬───────┘   └──────┬───────┘   └────────┬─────────┘    │
-│         │                  │                     │              │
-│         └──────────────────┼─────────────────────┘              │
-│                            │                                    │
-│                   ┌────────▼────────┐                           │
-│                   │  Synapse Core   │                           │
-│                   │  (Express API)  │                           │
-│                   └────────┬────────┘                           │
-│                            │                                    │
-│         ┌──────────────────┼──────────────────┐                 │
-│         │                  │                  │                 │
-│  ┌──────▼──────┐   ┌──────▼──────┐   ┌───────▼───────┐        │
-│  │   MemWal    │   │    Seal     │   │  Walrus Data  │        │
-│  │  (Memory)   │   │ (Encryption)│   │   Objects     │        │
-│  └──────┬──────┘   └──────┬──────┘   └───────┬───────┘        │
-│         │                  │                  │                 │
-│         └──────────────────┼──────────────────┘                 │
-│                            │                                    │
-│                   ┌────────▼────────┐                           │
-│                   │   Sui Move      │                           │
-│                   │  Smart Contracts│                           │
-│                   └────────┬────────┘                           │
-│                            │                                    │
-│                   ┌────────▼────────┐                           │
-│                   │  Walrus Network │                           │
-│                   │  (Blob Storage) │                           │
-│                   └─────────────────┘                           │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+Built on the **Sui blockchain**, Synapse uses **Walrus** for decentralized data storage and **Seal** for threshold encryption. This ensures data is only accessible to buyers who cryptographically prove their purchase via on-chain smart contracts.
 
 ---
 
-## ✨ Key Features
+## 💻 Vanguard Core Modules
 
-### 🧠 MemWal — Persistent Agent Memory
+The UI has been restructured into three high-contrast tactical modules:
 
-Agents don't just execute and die. With MemWal integration, every agent action — x402 payment negotiations, DeepBook arbitrage trades, market context analysis — is stored as **portable, verifiable memory** on Walrus.
+### `01 / DATA_MARKET` (Marketplace Feed)
+A fully on-chain directory where all listed datasets are displayed. Each listing includes metadata, pricing, and an encrypted Walrus storage reference. Agents use this directory to evaluate and purchase data.
 
-- **Cross-session continuity**: An agent that restarts can query: *"What was the optimal x402 streaming rate for this API yesterday?"*
-- **Multi-agent coordination**: Spin up Agent B, and it inherits Agent A's execution history instantly.
-- **Long-running workflows**: Persistent context across hours, days, or weeks of autonomous operation.
+### `02 / PUBLISH_LOCK` (Sell Data)
+The secure ingestion portal. Sellers upload files (CSV, JSON, TXT, PDF) or paste raw text. The application executes a secure 5-step publishing pipeline entirely in the browser: it generates a **Seal** policy ID, encrypts the payload locally (so plaintext never leaves the client), uploads the encrypted blob to **Walrus** storage, and finally publishes the metadata listing to the SUI ledger.
 
-```typescript
-import { MemWal } from '@mysten-incubation/memwal';
-
-// Agent stores execution log after a successful x402 negotiation
-await memwal.store({
-  agentId: delegateKey,
-  context: 'x402-negotiation',
-  payload: {
-    apiEndpoint: 'https://api.provider.com/data',
-    negotiatedRate: '0.002 SUI/req',
-    throughput: '1200 req/min',
-    timestamp: Date.now(),
-  },
-});
-
-// A different agent (or same agent after restart) recalls context
-const history = await memwal.recall({
-  agentId: delegateKey,
-  context: 'x402-negotiation',
-  limit: 10,
-});
-```
-
-### 🔐 Seal — Threshold Encryption & Access Control
-
-Walrus blobs are public by default. Seal changes that with **threshold encryption** where decryption keys are distributed across the Seal network and gated by on-chain Move logic.
-
-- **On-chain access policies**: Only wallets holding a `ComplianceOperatorCap` can decrypt sensitive blobs.
-- **Artifact-driven workflows**: RWA inspection reports, KYC compliance data, and proprietary trading logs are shared safely.
-- **Zero-trust by design**: No single point of failure for decryption keys.
-
-```move
-module synapse::access_control {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-
-    /// Capability granting decryption rights to compliance operators
-    struct ComplianceOperatorCap has key, store {
-        id: UID,
-    }
-
-    /// Only holders of this cap can request Seal decryption
-    public fun authorize_decrypt(
-        cap: &ComplianceOperatorCap,
-        blob_id: vector<u8>,
-    ): bool {
-        // Seal verifies on-chain cap ownership before releasing threshold shares
-        true
-    }
-}
-```
-
-### 📦 Programmable Walrus Data Objects
-
-On Sui, stored blobs aren't just pointers — they're **first-class on-chain objects** that your Move contracts actively manage.
-
-- **Automated lifecycle**: Auto-delete agent execution logs after 30 days.
-- **Dynamic retention**: Extend blob storage lifetime as long as an RWA asset is actively yielding.
-- **Native composability**: Data objects interact with DeFi protocols, governance, and access control seamlessly.
-
-```move
-module synapse::data_lifecycle {
-    /// Extends Walrus storage for active RWA assets
-    public fun extend_if_yielding(
-        blob: &mut WalrusBlob,
-        rwa_asset: &RWAAsset,
-        clock: &Clock,
-    ) {
-        if (rwa_asset.is_yielding()) {
-            blob.extend_lifetime(30 /* days */);
-        }
-    }
-
-    /// Prune stale agent memory after retention window
-    public fun prune_expired_logs(
-        blob: &mut WalrusBlob,
-        clock: &Clock,
-    ) {
-        if (clock.timestamp_ms() > blob.expiry()) {
-            blob.delete();
-        }
-    }
-}
-```
+### `03 / COMMAND_WALLETS` (Agent Wallet)
+A comprehensive command dashboard where Agent Owners can generate, fund, and monitor encrypted "buying wallets" for their AI agents (stored securely via SQLite on the backend). The interface features a **Runtime Trigger** to toggle the autonomous loop and a real-time **Cognitive Ingestion Engine Logs** terminal that streams the agent's decision-making process—such as memory checks, marketplace scans, candidate selection, and budget/topic evaluations.
 
 ---
 
-## 🛠️ Tech Stack
+## 👥 Core Personas
 
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| **Blockchain** | Sui (Move) | Smart contracts, object model, access control |
-| **Storage** | Walrus Network | Decentralized blob storage with programmable data objects |
-| **Memory** | MemWal SDK (`@mysten-incubation/memwal`) | Persistent, verifiable AI agent memory |
-| **Privacy** | Seal (Threshold Encryption) | On-chain-gated encryption/decryption |
-| **Payments** | x402 Protocol | AI-native micropayment streaming for API access |
-| **DeFi** | DeepBook v3 | On-chain order book for agent trading strategies |
-| **AI** | Google Gemini | Agent reasoning, negotiation, and decision-making |
-| **Backend** | Node.js + Express | API server, agent orchestration |
-| **Frontend** | React + TypeScript | Dashboard, monitoring, and operator interface |
+1. **Data Sellers**: Individuals or organizations with valuable private intelligence (research, trading signals, PDFs). They use `PUBLISH_LOCK` to set a price in SUI and earn cryptocurrency whenever an autonomous agent purchases their data.
+2. **Agent Owners (Buyers)**: Users operating AI agents. They connect their Web3 Sui wallet and create a dedicated `COMMAND_WALLET` for their agent to operate autonomously.
+3. **Autonomous Agents**: The automated consumers of the ecosystem. They scan the `DATA_MARKET`, evaluate listings, and execute secure on-chain transactions to acquire new knowledge.
 
 ---
 
-## 📂 Project Structure
+## 🏗️ Tech Stack
 
-```
-Synapse/
-├── contracts/                  # Sui Move smart contracts
-│   ├── sources/
-│   │   ├── access_control.move # Seal-gated decryption policies
-│   │   ├── data_lifecycle.move # Blob retention & pruning logic
-│   │   ├── agent_registry.move # On-chain agent identity & delegate keys
-│   │   └── memory_index.move   # MemWal blob reference management
-│   ├── tests/
-│   └── Move.toml
-│
-├── server/                     # Express backend & agent runtime
-│   ├── src/
-│   │   ├── agents/             # AI agent definitions & strategies
-│   │   ├── memwal/             # MemWal SDK integration layer
-│   │   ├── seal/               # Seal encryption/decryption helpers
-│   │   ├── x402/               # x402 payment negotiation engine
-│   │   ├── deepbook/           # DeepBook trading integration
-│   │   └── routes/             # REST API endpoints
-│   ├── package.json
-│   └── tsconfig.json
-│
-├── client/                     # React frontend dashboard
-│   ├── src/
-│   │   ├── components/         # UI components
-│   │   ├── pages/              # Dashboard views
-│   │   └── hooks/              # Custom React hooks
-│   └── package.json
-│
-├── scripts/                    # Deployment & utility scripts
-│   ├── deploy-contracts.sh
-│   ├── setup-walrus.sh
-│   └── seed-agents.ts
-│
-├── docs/                       # Additional documentation
-│   ├── ARCHITECTURE.md
-│   ├── MEMWAL_INTEGRATION.md
-│   └── SEAL_ACCESS_CONTROL.md
-│
-├── .env.example
-├── .gitignore
-├── LICENSE
-└── README.md
-```
+- **Smart Contracts**: Sui Move
+- **Decentralized Storage**: Walrus Protocol
+- **Threshold Encryption**: `@mysten/seal`
+- **Frontend**: React, Vite, TailwindCSS, Framer Motion, `@mysten/dapp-kit`
+- **Backend**: Node.js, Express, SQLite, `@google/generative-ai`
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Getting Started Locally
 
 ### Prerequisites
+- Node.js (v18+)
+- Sui CLI
 
-- **Node.js** >= 18.x
-- **Sui CLI** (`cargo install --locked --git https://github.com/MystenLabs/sui.git sui`)
-- **Walrus CLI** ([Installation Guide](https://docs.wal.app))
-- **Git**
-
-### 1. Clone the Repository
-
+### 1. Clone the repository
 ```bash
 git clone https://github.com/ola-893/Synapse.git
 cd Synapse
 ```
 
-### 2. Install Dependencies & Run the Stack
+### 2. Setup Environment Variables
+Copy `.env.example` to `.env` and fill in the required values (e.g. `SUI_PRIVATE_KEY` for the backend master wallet, and Gemini API keys).
 
-You can install all dependencies and start both the Express backend and React frontend simultaneously with a single command from the project root:
-
+### 3. Start the Backend
 ```bash
+cd server
+npm install
 npm run dev
 ```
 
-This uses `concurrently` to spin up both the backend (Port 3001) and frontend (Port 5173).
-
-### 3. Configure Environment
-
+### 4. Start the Frontend
+In a new terminal window:
 ```bash
-cp .env.example .env
+cd client
+npm install
+npm run dev
 ```
 
-Edit `.env` with your credentials:
-
-```env
-SUI_NETWORK=testnet
-SUI_PRIVATE_KEY=<your-sui-private-key>
-SYNAPSE_PACKAGE_ID=0x0982401c235bbbf32b99e420f365eb7df0264c3f4ee7785978cd7d58a571e62b
-SEAL_PACKAGE_ID=0x984960ebddd75c15c6d38355ac462621db0ffc7d6647214c802cd3b685e1af3d
-GEMINI_API_KEY=<your-gemini-api-key>
-MEMWAL_DELEGATE_KEY=<optional-memwal-key>
-MEMWAL_ACCOUNT_ID=<optional-memwal-id>
-```
-
-### 4. Deploy Move Contracts (Optional)
-
-If you wish to deploy your own instance of the Synapse contracts:
-
-```bash
-cd contracts
-sui move build
-sui client publish --gas-budget 500000000
-```
-*(Remember to update `SYNAPSE_PACKAGE_ID` in both `.env` and `client/.env` if you deploy your own).*
-
----
-
-## 🧪 Testing
-
-```bash
-# Move contract unit tests
-cd contracts && sui move test
-
-# Backend tests
-cd server && npm test
-
-# Frontend tests
-cd client && npm test
-
-# End-to-end integration tests
-npm run test:e2e
-```
-
----
-
-## 📊 How It Wins the Walrus Track
-
-| Track Requirement | Synapse Implementation |
-|---|---|
-| **Long-term memory** | MemWal stores every agent execution log as persistent, verifiable memory on Walrus |
-| **Multi-agent coordination** | Agents share memory via MemWal — Agent B reads Agent A's negotiation history instantly |
-| **Long-running workflows** | Persistent context survives restarts, crashes, and redeployments |
-| **Artifact-driven workflows** | RWA compliance docs encrypted via Seal, shared safely with on-chain access gating |
-| **Programmable data** | Move contracts actively manage blob lifecycles — auto-extend, auto-prune, compose with DeFi |
-| **Privacy & access control** | Seal threshold encryption with Move-native capability-gated decryption policies |
-
----
-
-## 🗺️ Roadmap
-
-- [x] Core architecture design
-- [x] MemWal SDK integration with agent runtime
-- [x] Seal encryption pipeline for sensitive data blobs
-- [x] Move smart contracts — access control, lifecycle, registry
-- [x] x402 payment negotiation engine
-- [x] DeepBook arbitrage agent with memory persistence
-- [x] React dashboard — agent monitoring, memory explorer, access logs
-- [x] Multi-agent coordination protocol
-- [ ] Mainnet deployment
-- [ ] SDK extraction for third-party agent builders
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please read our contributing guidelines before submitting a PR.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
-
----
-
-## 🔗 Resources
-
-- [Walrus Documentation](https://docs.wal.app)
-- [MemWal SDK](https://walrus.xyz)
-- [Seal Privacy Layer](https://docs.wal.app)
-- [Sui Move Documentation](https://docs.sui.io)
-- [x402 Protocol](https://x402.org)
-- [DeepBook v3](https://deepbook.tech)
-
----
-
-<p align="center">
-  <strong>Built for the 2026 Walrus Track Hackathon</strong><br/>
-  <em>Portable memory. Verifiable execution. Encrypted by default.</em>
-</p>
+### 5. Access the Vanguard Interface
+Open your browser and navigate to `http://localhost:5173`.
