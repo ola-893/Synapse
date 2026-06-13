@@ -9,7 +9,11 @@ export async function listDataset(blobIds: string[], policyId: string, metadata:
 
   // Register on-chain
   const tx = new Transaction();
-  const policyBytes = Buffer.from(policyId.replace('0x', ''), 'hex');
+  const cleanPolicyId = policyId.replace('0x', '');
+  if (!/^[0-9a-fA-F]+$/.test(cleanPolicyId)) {
+    throw new Error(`policyId must be a hex string, got: ${policyId}`);
+  }
+  const policyBytes = Buffer.from(cleanPolicyId, 'hex');
 
   // Convert blob IDs to a nested vector format expected by Move
   const blobIdsArg = tx.pure(
