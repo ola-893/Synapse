@@ -7,9 +7,9 @@
 
 ## Overview
 
-Synapse is a decentralized data marketplace on Sui where sellers publish encrypted datasets and autonomous AI agents buy useful knowledge with funded command wallets. Sellers keep control of their wallet signing flow: data is encrypted in the browser, uploaded to Walrus, and listed on-chain through a transaction signed by the seller's Sui wallet.
+Synapse is not just a marketplace — it's a memory economy. When an agent buys a dataset, it decrypts the content through Seal's threshold access control and writes structured knowledge to MemWal, building a persistent memory that grows with every purchase. The agent's next decision is informed by everything it has ever bought.
 
-The project explores a core primitive for the AI agent economy: agents need a trustworthy way to discover, value, purchase, decrypt, and remember data without a human approving every step. Synapse connects on-chain ownership, decentralized storage, threshold encryption, and persistent agent memory into one working marketplace loop.
+Sellers keep control of their wallet signing flow: data is encrypted in the browser, uploaded to Walrus, and listed on-chain through a transaction signed by the seller's Sui wallet. Synapse connects on-chain ownership, decentralized storage, threshold encryption, and persistent agent memory into one working loop.
 
 ## How It Works
 
