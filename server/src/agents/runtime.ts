@@ -4,7 +4,7 @@ import { getMemWal } from '../config/memwal.ts';
 import { secureRemember } from '../memwal/manual.ts';
 import { getActiveListings } from '../marketplace/discovery.ts';
 import { purchaseDataset, ingestDataset } from '../marketplace/buyer.ts';
-import { saveAgentWallet, getAgentWallet } from '../db/sqlite.ts';
+import { saveAgentWallet, getAgentWallet, savePurchase } from '../db/sqlite.ts';
 
 let activeTask: cron.ScheduledTask | null = null;
 let lastTickTime: Date | null = null;
@@ -25,13 +25,35 @@ export async function getActiveAgentKeypair(): Promise<Ed25519Keypair | null> {
 }
 
 /**
- * AI Brain evaluates if a dataset is worth purchasing based on its description and price.
+ * AI Brain evaluates if a dataset is worth purchasing.
+ * Uses broad keyword matching and a reasonable price ceiling.
+ * In production, this would call Gemini for semantic evaluation.
  */
-async function evaluateDatasetValue(listing: any): Promise<boolean> {
-  // Mock decision logic: AI deems datasets < 0.01 SUI valuable if they contain "alpha" or "signal"
-  if (listing.priceMist > 10000000) return false;
+async function evaluateDatasetValue(listing: any): Promise<{ shouldBuy: boolean; reason: string }> {
+  // Price gate: reject anything over 1 SUI (1_000_000_000 MIST)
+  if (listing.priceMist > 1_000_000_000) {
+    return { shouldBuy: false, reason: `Price ${listing.priceMist} MIST exceeds 1 SUI budget cap` };
+  }
+  
   const text = (listing.title + ' ' + listing.description).toLowerCase();
-  return text.includes('alpha') || text.includes('signal');
+  const VALUABLE_KEYWORDS = [
+    'data', 'signal', 'alpha', 'metric', 'analysis', 'research',
+    'trading', 'defi', 'model', 'prediction', 'dataset', 'report',
+    'neuro', 'genomic', 'climate', 'financial', 'market', 'flux',
+    'salinity', 'survey', 'sensor', 'log', 'profile', 'volumetric',
+  ];
+  const matched = VALUABLE_KEYWORDS.filter(kw => text.includes(kw));
+  
+  if (matched.length > 0) {
+    return { shouldBuy: true, reason: `Matched keywords: ${matched.join(', ')}` };
+  }
+  
+  // Default: buy cheap datasets (< 0.1 SUI) even without keyword match
+  if (listing.priceMist <= 100_000_000) {
+    return { shouldBuy: true, reason: 'Low-cost dataset, auto-approved for exploration' };
+  }
+  
+  return { shouldBuy: false, reason: 'No valuable keywords found and price above auto-buy threshold' };
 }
 
 /**
@@ -65,14 +87,22 @@ async function executeAgentTick() {
     // 3. EVALUATE & PURCHASE
     for (const listing of listings) {
       // In a real app we'd check if we already bought it to prevent duplicate purchases.
-      const isValuable = await evaluateDatasetValue(listing);
-      if (isValuable) {
-        console.log(`[Agent] AI Brain decided to purchase dataset: "${listing.title}"`);
+      const evaluation = await evaluateDatasetValue(listing);
+      if (evaluation.shouldBuy) {
+        console.log(`[Agent] AI Brain decided to purchase dataset: "${listing.title}" — Reason: ${evaluation.reason}`);
         try {
           const receiptId = await purchaseDataset(listing, agentKeypair);
           console.log(`[Agent] Ingesting purchased knowledge...`);
           await ingestDataset(listing, receiptId, agentKeypair);
           console.log(`[Agent] Successfully learned new knowledge from marketplace!`);
+          
+          // Save purchase to history (Bug #6)
+          await savePurchase(activeOwnerAddress!, {
+            listingId: listing.id,
+            listingTitle: listing.title,
+            amountMist: listing.priceMist,
+            receiptId,
+          });
           
           // Log the acquisition
           await getMemWal(currentAgentAddress).remember(`Purchased and ingested dataset: ${listing.title} for ${listing.priceMist} MIST.`);
@@ -80,7 +110,7 @@ async function executeAgentTick() {
           console.error(`[Agent] Failed to purchase/ingest dataset:`, e.message);
         }
       } else {
-        console.log(`[Agent] Ignored dataset: "${listing.title}" (not valuable enough)`);
+        console.log(`[Agent] Skipped dataset: "${listing.title}" — Reason: ${evaluation.reason}`);
       }
     }
 

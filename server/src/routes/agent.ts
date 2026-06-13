@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { startAgentLoop, stopAgentLoop, getAgentStatus, registerAgent } from '../agents/runtime.ts';
+import { getPurchases } from '../db/sqlite.ts';
 
 export const agentRouter = Router();
 
@@ -44,4 +45,17 @@ agentRouter.post('/stop', (req, res) => {
 
 agentRouter.get('/status', async (req, res) => {
   res.json(await getAgentStatus());
+});
+
+agentRouter.get('/purchases', async (req, res) => {
+  try {
+    const ownerAddress = req.query.ownerAddress as string;
+    if (!ownerAddress) {
+      return res.status(400).json({ error: 'ownerAddress query parameter is required' });
+    }
+    const purchases = await getPurchases(ownerAddress);
+    res.json({ purchases });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 });

@@ -5,10 +5,11 @@ import { getActiveListings, getListingById } from '../marketplace/discovery.ts';
 import { requireX402Payment } from '../x402/middleware.ts';
 import { getMemWal } from '../config/memwal.ts';
 import { agentAddress } from '../config/sui.ts';
+import { saveCachedListing } from '../db/sqlite.ts';
 
 export const marketplaceRouter = Router();
 
-// Seller Routes
+// Seller Routes (legacy — backend signs; kept for backward compat)
 marketplaceRouter.post('/list', async (req, res) => {
   try {
     const { blobIds, policyId, metadata, priceMist } = req.body;
@@ -19,6 +20,29 @@ marketplaceRouter.post('/list', async (req, res) => {
     res.json({ message: 'Dataset listed successfully', listingId });
   } catch (error: any) {
     console.error('[Marketplace List Error]', error.stack || error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Indexed route — frontend signs the tx, then tells backend to cache metadata
+marketplaceRouter.post('/indexed', async (req, res) => {
+  try {
+    const { digest, blobId, policyId, title, description, priceMist, sellerAddress } = req.body;
+    if (!blobId || !title || !sellerAddress) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    await saveCachedListing({
+      txDigest: digest,
+      blobId,
+      policyId: policyId || '',
+      title,
+      description: description || '',
+      priceMist: priceMist || 0,
+      sellerAddress,
+    });
+    res.json({ message: 'Listing indexed successfully' });
+  } catch (error: any) {
+    console.error('[Marketplace Index Error]', error.stack || error);
     res.status(500).json({ error: error.message });
   }
 });

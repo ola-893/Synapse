@@ -14,6 +14,18 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
  */
 export async function purchaseDataset(listing: DatasetListing, agentKeypair: Ed25519Keypair): Promise<string> {
   const agentAddress = agentKeypair.getPublicKey().toSuiAddress();
+  
+  // Pre-flight balance check to avoid cryptic "No valid gas coins" error
+  const balance = await suiClient.getBalance({ owner: agentAddress });
+  const totalBalance = BigInt(balance.totalBalance);
+  const requiredMist = BigInt(listing.priceMist) + BigInt(10_000_000); // price + ~0.01 SUI gas buffer
+  if (totalBalance < requiredMist) {
+    throw new Error(
+      `Insufficient balance. Agent has ${totalBalance} MIST but needs at least ${requiredMist} MIST ` +
+      `(${listing.priceMist} MIST price + gas). Fund the agent wallet: ${agentAddress}`
+    );
+  }
+  
   const tx = new Transaction();
   
   // Split payment coin

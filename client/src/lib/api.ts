@@ -113,6 +113,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ blobIds, policyId, metadata, priceMist }),
     }),
+  indexListing: (data: { digest: string; blobId: string; policyId: string; title: string; description: string; priceMist: number; sellerAddress: string }) =>
+    request<{ message: string }>('/api/marketplace/indexed', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
   purchaseDataset: (id: string) =>
     request<{ message: string; receiptId: string }>(`/api/marketplace/purchase/${id}`, {
       method: 'POST',

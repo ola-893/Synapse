@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ShieldAlert,
-  Layers,
   RefreshCw,
   CheckCircle,
   Database,
@@ -10,9 +9,9 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
 import { api } from '../lib/api';
-import { formatMist } from '../lib/sui';
+import { formatMist, buildListDatasetTx } from '../lib/sui';
 import { useSeal } from '../hooks/useSeal';
 import { uploadToWalrus } from '../lib/walrus';
 import { useToast } from '../components/Toast';
@@ -72,6 +71,7 @@ export default function SellDataLegacy({ onSuccess }: SellDataLegacyProps) {
   const { encryptData } = useSeal();
   const queryClient = useQueryClient();
   const toast = useToast();
+  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
 
   // ─── Form state ─────────────────────────────────────────────
   const [title, setTitle] = useState('');
@@ -134,10 +134,32 @@ export default function SellDataLegacy({ onSuccess }: SellDataLegacyProps) {
       const uploadedBlobId = await uploadToWalrus(encryptedBytes);
       setBlobId(uploadedBlobId);
 
-      // Step 4: Register on-chain listing via backend
+      // Step 4: Sign and submit listing transaction from user's wallet
       setStatusStep(4);
       const priceMist = Math.round(priceNum * 1_000_000_000);
-      await api.listDataset([uploadedBlobId], policyId, { title, description }, priceMist);
+      const tx = buildListDatasetTx({
+        title,
+        description,
+        priceMist,
+        blobIds: [uploadedBlobId],
+        sealPolicyId: policyId,
+      });
+      const result = await signAndExecute({ transaction: tx });
+
+      // Notify backend to index the listing for fast reads
+      try {
+        await api.indexListing({
+          digest: result.digest,
+          blobId: uploadedBlobId,
+          policyId,
+          title,
+          description,
+          priceMist,
+          sellerAddress: account!.address,
+        });
+      } catch (indexErr) {
+        console.warn('[SellData] Backend indexing failed (non-critical):', indexErr);
+      }
 
       // Step 5: Done — reset
       setStatusStep(5);

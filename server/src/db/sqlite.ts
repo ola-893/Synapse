@@ -30,6 +30,33 @@ export async function initDB() {
     )
   `);
 
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS cached_listings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tx_digest TEXT,
+      blob_id TEXT NOT NULL,
+      policy_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      price_mist INTEGER NOT NULL,
+      seller_address TEXT NOT NULL,
+      created_at INTEGER DEFAULT (cast(strftime('%s', 'now') as int))
+    )
+  `);
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS agent_purchases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      owner_address TEXT NOT NULL,
+      listing_id TEXT NOT NULL,
+      listing_title TEXT NOT NULL,
+      amount_mist INTEGER NOT NULL,
+      receipt_id TEXT,
+      tx_digest TEXT,
+      purchased_at INTEGER DEFAULT (cast(strftime('%s', 'now') as int))
+    )
+  `);
+
   console.log(`[DB] Database initialized successfully`);
   return db;
 }
@@ -72,4 +99,45 @@ export async function getAgentWallet(ownerAddress: string): Promise<{ agentAddre
     agentAddress: row.agent_address,
     privateKeyStr
   };
+}
+
+export async function saveCachedListing(data: {
+  txDigest?: string;
+  blobId: string;
+  policyId: string;
+  title: string;
+  description: string;
+  priceMist: number;
+  sellerAddress: string;
+}) {
+  const database = await initDB();
+  await database.run(
+    `INSERT INTO cached_listings (tx_digest, blob_id, policy_id, title, description, price_mist, seller_address)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [data.txDigest || null, data.blobId, data.policyId, data.title, data.description, data.priceMist, data.sellerAddress]
+  );
+  console.log(`[DB] Cached listing: "${data.title}" from seller ${data.sellerAddress}`);
+}
+
+export async function savePurchase(ownerAddress: string, purchase: {
+  listingId: string;
+  listingTitle: string;
+  amountMist: number;
+  receiptId?: string;
+  txDigest?: string;
+}) {
+  const database = await initDB();
+  await database.run(
+    `INSERT INTO agent_purchases (owner_address, listing_id, listing_title, amount_mist, receipt_id, tx_digest)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [ownerAddress, purchase.listingId, purchase.listingTitle, purchase.amountMist, purchase.receiptId || null, purchase.txDigest || null]
+  );
+}
+
+export async function getPurchases(ownerAddress: string) {
+  const database = await initDB();
+  return database.all(
+    `SELECT * FROM agent_purchases WHERE owner_address = ? ORDER BY purchased_at DESC`,
+    [ownerAddress]
+  );
 }
