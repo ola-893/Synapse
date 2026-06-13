@@ -39,32 +39,6 @@ async function readFileForBackend(file: File): Promise<string> {
   });
 }
 
-const PRESETS = [
-  {
-    title: 'Neuro-Anatomy_fMRI_Volumetric_Metrics',
-    price: 9.5,
-    description:
-      'Multi-voxel pattern analysis coordinates tracking blood-oxygen-level-dependent signaling responses mapped inside cortical vision centers.',
-    content:
-      'VOX_ID,TIME_MS,BOLD_Z_SCORE,REGION_MUTATION\nVX_0110,120,2.152,V1_Primary_Visual\nVX_0112,240,1.801,V2_Cortical_Depth\nVX_0114,360,-0.412,V4_Color_Vector\nVX_0116,480,3.004,V1_Primary_Visual',
-  },
-  {
-    title: 'Solar-Wind_Magnetosphere_Flux_Grids',
-    price: 6.2,
-    description:
-      'High-latitude magnetometer sensor reports measuring magnetic vector flux anomalies and coronal mass ejection impacts at 1-second grain.',
-    content:
-      'SAMP_UTC,FLUX_NT,VECTOR_DEG,INTEGRITY_INDEX\n1781084221,412.5,12.502,0.992\n1781084222,410.1,12.504,0.992\n1781084223,409.8,12.511,0.994\n1781084224,414.2,12.499,0.991',
-  },
-  {
-    title: 'Meltwater_Salinity_Vertical_Profile_Q2',
-    price: 3.8,
-    description:
-      'Continuous probe recordings tracking salinity percentage, isotopic oxygen values, and conductive temperature depth from Antarctic glaciers.',
-    content:
-      'DEPTH_M,SALINITY_PPT,TEMP_C,O18_RATIO\n2.0,34.12,-1.45,-0.0212\n5.0,34.11,-1.44,-0.0210\n10.0,34.08,-1.40,-0.0205\n20.0,33.95,-1.31,-0.0198',
-  },
-];
 
 export default function SellDataLegacy({ onSuccess }: SellDataLegacyProps) {
   const account = useCurrentAccount();
@@ -96,15 +70,6 @@ export default function SellDataLegacy({ onSuccess }: SellDataLegacyProps) {
   const totalListings = listings.data?.listings.filter((l) => l.isActive).length ?? 0;
 
   // ─── Handlers ───────────────────────────────────────────────
-  const handleApplyPreset = (idx: number) => {
-    const p = PRESETS[idx];
-    setTitle(p.title);
-    setPriceSui(p.price.toString());
-    setDescription(p.description);
-    setDatasetText(p.content);
-    setSelectedFileName(null);
-    setErrorMsg('');
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -4,25 +4,6 @@ import { SessionKey, SealClient } from '@mysten/seal';
 
 import { bcs } from '@mysten/bcs';
 
-const KeyServerMoveV1 = bcs.struct('KeyServerV1', {
-  name: bcs.string(),
-  url: bcs.string(),
-  keyType: bcs.u8(),
-  pk: bcs.vector(bcs.u8())
-});
-
-const ServerType = bcs.enum('ServerType', {
-  Independent: bcs.struct('Independent', { url: bcs.string() }),
-  Committee: bcs.struct('Committee', {})
-});
-
-const KeyServerMoveV2 = bcs.struct('KeyServerV2', {
-  name: bcs.string(),
-  keyType: bcs.u8(),
-  pk: bcs.vector(bcs.u8()),
-  serverType: ServerType
-});
-
 export function useSeal() {
   const suiClient = useSuiClient();
   const account = useCurrentAccount();
