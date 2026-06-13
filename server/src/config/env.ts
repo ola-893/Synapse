@@ -2,6 +2,7 @@ import { z } from 'zod';
 import dotenv from 'dotenv';
 
 dotenv.config({ path: '../.env' });
+dotenv.config({ path: '.env', override: true });
 
 const envSchema = z.object({
   // Sui

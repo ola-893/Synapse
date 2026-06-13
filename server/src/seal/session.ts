@@ -38,8 +38,12 @@ export async function buildApprovalTransaction(
 ): Promise<Uint8Array> {
   const tx = new Transaction();
   
-  // The sealPolicyId is used as the Seal policy ID
-  const idBytes = new TextEncoder().encode(sealPolicyId);
+  // Seal identities are hex strings; the Move approval receives their raw bytes.
+  const cleanSealPolicyId = sealPolicyId.replace(/^0x/, '');
+  const idBytes =
+    /^[0-9a-fA-F]+$/.test(cleanSealPolicyId) && cleanSealPolicyId.length % 2 === 0
+      ? Buffer.from(cleanSealPolicyId, 'hex')
+      : new TextEncoder().encode(sealPolicyId);
   
   tx.moveCall({
     target: `${env.SYNAPSE_PACKAGE_ID}::marketplace::seal_approve_purchase`,

@@ -1,23 +1,32 @@
 import { Router } from 'express';
 import { startAgentLoop, stopAgentLoop, getAgentStatus, registerAgent } from '../agents/runtime.ts';
-import { getPurchases } from '../db/sqlite.ts';
+import { getAgentWallet, getPurchases } from '../db/sqlite.ts';
 
 export const agentRouter = Router();
 
 agentRouter.post('/register', async (req, res) => {
-  const { ownerPublicKey } = req.body;
-  if (!ownerPublicKey) {
-    return res.status(400).json({ error: 'ownerPublicKey is required' });
+  const ownerAddress = req.body.ownerAddress || req.body.ownerPublicKey;
+  if (!ownerAddress) {
+    return res.status(400).json({ error: 'ownerAddress is required' });
   }
   try {
-    const result = await registerAgent({ ownerPublicKey });
-    res.json({ message: 'Agent registered successfully', ...result });
+    const result = await registerAgent({ ownerPublicKey: ownerAddress });
+    res.json({ message: 'Agent registered successfully', ownerAddress, ...result });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
 
 agentRouter.get('/wallet', async (req, res) => {
+  const ownerAddress = req.query.ownerAddress as string | undefined;
+  if (ownerAddress) {
+    const wallet = await getAgentWallet(ownerAddress);
+    if (!wallet) {
+      return res.status(404).json({ error: 'No agent wallet found. Register first.' });
+    }
+    return res.json({ publicKey: wallet.agentAddress, agentAddress: wallet.agentAddress, ownerAddress });
+  }
+
   const status = await getAgentStatus();
   if (!status.isRegistered) {
     return res.status(404).json({ error: 'No agent wallet found. Register first.' });

@@ -18,6 +18,10 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: Date.now() });
 });
 
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: Date.now() });
+});
+
 // Mount API routes
 app.use('/api/agent', agentRouter);
 app.use('/api/memory', memoryRouter);

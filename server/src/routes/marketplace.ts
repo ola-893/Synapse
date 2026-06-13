@@ -1,51 +1,60 @@
 import { Router } from 'express';
-import { listDataset } from '../marketplace/seller.ts';
 import { purchaseDataset, ingestDataset } from '../marketplace/buyer.ts';
 import { getActiveListings, getListingById } from '../marketplace/discovery.ts';
 import { requireX402Payment } from '../x402/middleware.ts';
 import { getMemWal } from '../config/memwal.ts';
-import { agentAddress } from '../config/sui.ts';
+import { suiClient } from '../config/sui.ts';
 import { saveCachedListing } from '../db/sqlite.ts';
 
 export const marketplaceRouter = Router();
 
-// Seller Routes (legacy — backend signs; kept for backward compat)
-marketplaceRouter.post('/list', async (req, res) => {
+async function resolveListingIdFromDigest(digest?: string): Promise<string | undefined> {
+  if (!digest) return undefined;
   try {
-    const { blobIds, policyId, metadata, priceMist } = req.body;
-    if (!blobIds || !policyId || !metadata || typeof priceMist !== 'number') {
-      return res.status(400).json({ error: 'Missing blobIds, policyId, metadata, or priceMist' });
-    }
-    const listingId = await listDataset(blobIds, policyId, metadata, priceMist);
-    res.json({ message: 'Dataset listed successfully', listingId });
+    const tx = await suiClient.waitForTransaction({
+      digest,
+      options: { showEvents: true },
+    });
+    const event = tx.events?.find((item: any) => item.type?.includes('DatasetListed'));
+    return (event as any)?.parsedJson?.listing_id;
   } catch (error: any) {
-    console.error('[Marketplace List Error]', error.stack || error);
-    res.status(500).json({ error: error.message });
+    console.warn('[marketplace/list] Could not resolve listing id from digest:', error.message);
+    return undefined;
   }
-});
+}
 
-// Indexed route — frontend signs the tx, then tells backend to cache metadata
-marketplaceRouter.post('/indexed', async (req, res) => {
+async function indexListing(req: any, res: any) {
   try {
     const { digest, blobId, policyId, title, description, priceMist, sellerAddress } = req.body;
-    if (!blobId || !title || !sellerAddress) {
-      return res.status(400).json({ error: 'Missing required fields' });
+
+    if (!title || !blobId || !sellerAddress) {
+      return res.status(400).json({ error: 'title, blobId, and sellerAddress are required' });
     }
+
+    const listingId = (await resolveListingIdFromDigest(digest)) || digest || `local_${Date.now()}`;
+
     await saveCachedListing({
+      listingId,
       txDigest: digest,
       blobId,
       policyId: policyId || '',
       title,
       description: description || '',
-      priceMist: priceMist || 0,
-      sellerAddress,
+      priceMist: Number(priceMist),
+      sellerAddress, // User wallet address from the browser-signed transaction flow
+      isActive: true,
     });
-    res.json({ message: 'Listing indexed successfully' });
+
+    res.json({ success: true, listingId });
   } catch (error: any) {
-    console.error('[Marketplace Index Error]', error.stack || error);
+    console.error('[marketplace/list]', error.stack || error);
     res.status(500).json({ error: error.message });
   }
-});
+}
+
+// Seller metadata indexing route. The browser wallet signs the on-chain listing.
+marketplaceRouter.post('/list', indexListing);
+marketplaceRouter.post('/indexed', indexListing);
 
 // Discovery Routes
 marketplaceRouter.get('/listings', async (req, res) => {

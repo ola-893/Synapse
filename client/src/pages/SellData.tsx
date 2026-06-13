@@ -83,12 +83,13 @@ export default function SellDataLegacy({ onSuccess }: SellDataLegacyProps) {
     if (Number.isNaN(priceNum) || priceNum <= 0) return setErrorMsg('Price must be a valid positive number.');
 
     try {
+      if (!account) throw new Error('Connect your Sui wallet first');
+
       setIsPublishing(true);
       // Step 1: Generate random 32-byte Seal policy ID
       setStatusStep(1);
       const policyIdBytes = crypto.getRandomValues(new Uint8Array(32));
-      const policyId =
-        '0x' + Array.from(policyIdBytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+      const policyId = Array.from(policyIdBytes).map((b) => b.toString(16).padStart(2, '0')).join('');
 
       // Step 2: Encrypt in browser via Seal
       setStatusStep(2);
@@ -106,10 +107,10 @@ export default function SellDataLegacy({ onSuccess }: SellDataLegacyProps) {
         title,
         description,
         priceMist,
-        blobIds: [uploadedBlobId],
-        sealPolicyId: policyId,
+        blobId: uploadedBlobId,
+        policyIdBytes,
       });
-      const result = await signAndExecute({ transaction: tx });
+      const result = await signAndExecute({ transaction: tx as any });
 
       // Notify backend to index the listing for fast reads
       try {
@@ -120,7 +121,7 @@ export default function SellDataLegacy({ onSuccess }: SellDataLegacyProps) {
           title,
           description,
           priceMist,
-          sellerAddress: account!.address,
+          sellerAddress: account.address,
         });
       } catch (indexErr) {
         console.warn('[SellData] Backend indexing failed (non-critical):', indexErr);
@@ -242,7 +243,7 @@ export default function SellDataLegacy({ onSuccess }: SellDataLegacyProps) {
                   {statusStep === 1 && 'Generating random 32-byte Seal policy ID...'}
                   {statusStep === 2 && 'Encrypting data in-browser via Seal threshold cryptography...'}
                   {statusStep === 3 && 'Uploading encrypted payload to Walrus decentralized storage...'}
-                  {statusStep === 4 && 'Registering listing on Sui Devnet via backend...'}
+                  {statusStep === 4 && 'Requesting wallet signature and registering listing on Sui Testnet...'}
                   {statusStep === 5 && 'Listing published successfully!'}
                 </p>
               </div>
@@ -482,7 +483,7 @@ export default function SellDataLegacy({ onSuccess }: SellDataLegacyProps) {
                 <strong className="text-[#111312] block font-sans not-italic font-black text-xs uppercase mb-1">
                   3. On-Chain Listing
                 </strong>
-                <p>Backend registers your listing on Sui Testnet. Agents can discover and purchase it.</p>
+                <p>Your wallet registers the listing on Sui Testnet. The backend only indexes metadata for fast reads.</p>
               </div>
             </div>
           </div>

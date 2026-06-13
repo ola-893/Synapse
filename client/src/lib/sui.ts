@@ -1,4 +1,5 @@
 import { Transaction } from '@mysten/sui/transactions';
+import { bcs } from '@mysten/sui/bcs';
 import { CLOCK_OBJECT_ID, MIST_PER_SUI, SYNAPSE_PACKAGE_ID } from './config';
 import type { DatasetListing } from './api';
 
@@ -13,6 +14,14 @@ export type OwnedObjectSummary = {
 export type ChainDatasetListing = DatasetListing & {
   source: 'contract';
 };
+
+export interface ListDatasetParams {
+  title: string;
+  description: string;
+  priceMist: number;
+  blobId: string;
+  policyIdBytes: Uint8Array;
+}
 
 export type ManagedBlob = {
   id: string;
@@ -44,10 +53,20 @@ export function textToBytes(text: string) {
   return Array.from(new TextEncoder().encode(text));
 }
 
+function bytesToHex(bytes: number[]) {
+  return bytes.map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
 function decodeBytes(value: any): string {
   if (Array.isArray(value)) return new TextDecoder().decode(new Uint8Array(value.map(Number)));
   if (typeof value === 'string') return value;
   return JSON.stringify(value);
+}
+
+function decodeHexBytes(value: any): string {
+  if (Array.isArray(value)) return bytesToHex(value.map(Number));
+  if (typeof value === 'string') return value.replace(/^0x/, '');
+  return '';
 }
 
 function getFields(obj: any): MoveObjectFields | undefined {
@@ -108,13 +127,16 @@ export async function getChainListings(client: any): Promise<ChainDatasetListing
       if (!obj.data?.objectId || !fields) return null;
       return {
         id: obj.data.objectId,
+        listingId: obj.data.objectId,
         owner: fields.owner,
+        sellerAddress: fields.owner,
         title: fields.title,
         description: fields.description,
         priceMist: Number(fields.price_mist),
+        blobId: (fields.blob_ids || []).map(decodeBytes)[0] || '',
         blobIds: (fields.blob_ids || []).map(decodeBytes),
         chunkCount: Number(fields.chunk_count),
-        sealPolicyId: decodeBytes(fields.seal_policy_id),
+        sealPolicyId: decodeHexBytes(fields.seal_policy_id),
         isActive: Boolean(fields.is_active),
         createdAt: Number(fields.created_at),
         source: 'contract' as const,
@@ -223,27 +245,28 @@ export function buildPruneBlobTx(managedBlobId: string): any {
   return tx;
 }
 
-export function buildListDatasetTx(input: {
-  title: string;
-  description: string;
-  priceMist: number;
-  blobIds: string[];
-  sealPolicyId: string;
-}): any {
+export function buildListDatasetTx(params: ListDatasetParams): Transaction {
+  const { title, description, priceMist, blobId, policyIdBytes } = params;
+  const PACKAGE_ID = import.meta.env.VITE_SYNAPSE_PACKAGE_ID || SYNAPSE_PACKAGE_ID;
+  if (!PACKAGE_ID || PACKAGE_ID.includes('placeholder')) {
+    throw new Error('VITE_SYNAPSE_PACKAGE_ID is not set. Check client/.env');
+  }
+
   const tx = new Transaction();
-  const blobVec = tx.makeMoveVec({
-    elements: input.blobIds.map((blobId) => tx.pure.vector('u8', textToBytes(blobId))),
-  });
+  const blobIdBytes = Array.from(new TextEncoder().encode(blobId));
+  const blobIdsArg = tx.pure(
+    bcs.vector(bcs.vector(bcs.u8())).serialize([blobIdBytes]).toBytes()
+  );
 
   tx.moveCall({
-    target: `${SYNAPSE_PACKAGE_ID}::marketplace::list_dataset`,
+    target: `${PACKAGE_ID}::marketplace::list_dataset`,
     arguments: [
-      tx.pure.string(input.title),
-      tx.pure.string(input.description),
-      tx.pure.u64(input.priceMist),
-      blobVec,
-      tx.pure.u64(input.blobIds.length),
-      tx.pure.vector('u8', textToBytes(input.sealPolicyId)),
+      tx.pure.string(title),
+      tx.pure.string(description),
+      tx.pure.u64(BigInt(priceMist)),
+      blobIdsArg,
+      tx.pure.u64(1n),
+      tx.pure.vector('u8', Array.from(policyIdBytes)),
       tx.object(CLOCK_OBJECT_ID),
     ],
   });

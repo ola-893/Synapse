@@ -150,10 +150,10 @@ export async function registerAgent(config: { ownerPublicKey: string }): Promise
 
 export function startAgentLoop() {
   if (isRunning) return;
-  console.log('Starting Synapse Agent Runtime (2-minute intervals)...');
+  console.log('Starting Synapse Agent Runtime (1-minute intervals)...');
   
-  // Run every 2 minutes
-  activeTask = cron.schedule('*/2 * * * *', executeAgentTick);
+  // Run every minute
+  activeTask = cron.schedule('* * * * *', executeAgentTick);
   isRunning = true;
   
   // Trigger first tick immediately

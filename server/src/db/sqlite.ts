@@ -33,6 +33,7 @@ export async function initDB() {
   await db.exec(`
     CREATE TABLE IF NOT EXISTS cached_listings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      listing_id TEXT,
       tx_digest TEXT,
       blob_id TEXT NOT NULL,
       policy_id TEXT NOT NULL,
@@ -40,9 +41,13 @@ export async function initDB() {
       description TEXT NOT NULL,
       price_mist INTEGER NOT NULL,
       seller_address TEXT NOT NULL,
+      is_active INTEGER DEFAULT 1,
       created_at INTEGER DEFAULT (cast(strftime('%s', 'now') as int))
     )
   `);
+
+  await ensureColumn('cached_listings', 'listing_id', 'TEXT');
+  await ensureColumn('cached_listings', 'is_active', 'INTEGER DEFAULT 1');
 
   await db.exec(`
     CREATE TABLE IF NOT EXISTS agent_purchases (
@@ -59,6 +64,13 @@ export async function initDB() {
 
   console.log(`[DB] Database initialized successfully`);
   return db;
+}
+
+async function ensureColumn(tableName: string, columnName: string, definition: string) {
+  const columns = await db.all(`PRAGMA table_info(${tableName})`);
+  if (!columns.some((column: any) => column.name === columnName)) {
+    await db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+  }
 }
 
 export async function saveAgentWallet(ownerAddress: string, agentAddress: string, privateKeyStr: string) {
@@ -102,6 +114,7 @@ export async function getAgentWallet(ownerAddress: string): Promise<{ agentAddre
 }
 
 export async function saveCachedListing(data: {
+  listingId?: string;
   txDigest?: string;
   blobId: string;
   policyId: string;
@@ -109,14 +122,51 @@ export async function saveCachedListing(data: {
   description: string;
   priceMist: number;
   sellerAddress: string;
+  isActive?: boolean;
 }) {
   const database = await initDB();
   await database.run(
-    `INSERT INTO cached_listings (tx_digest, blob_id, policy_id, title, description, price_mist, seller_address)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [data.txDigest || null, data.blobId, data.policyId, data.title, data.description, data.priceMist, data.sellerAddress]
+    `INSERT INTO cached_listings (listing_id, tx_digest, blob_id, policy_id, title, description, price_mist, seller_address, is_active)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      data.listingId || data.txDigest || null,
+      data.txDigest || null,
+      data.blobId,
+      data.policyId,
+      data.title,
+      data.description,
+      data.priceMist,
+      data.sellerAddress,
+      data.isActive === false ? 0 : 1,
+    ]
   );
   console.log(`[DB] Cached listing: "${data.title}" from seller ${data.sellerAddress}`);
+}
+
+export async function getCachedListings() {
+  const database = await initDB();
+  const rows = await database.all(
+    `SELECT * FROM cached_listings ORDER BY created_at DESC`
+  );
+
+  return rows.map((row: any) => {
+    const listingId = row.listing_id || row.tx_digest || `local_${row.id}`;
+    return {
+      id: listingId,
+      listingId,
+      owner: row.seller_address,
+      sellerAddress: row.seller_address,
+      title: row.title,
+      description: row.description,
+      priceMist: Number(row.price_mist),
+      blobId: row.blob_id,
+      blobIds: [row.blob_id],
+      chunkCount: 1,
+      sealPolicyId: row.policy_id,
+      isActive: Boolean(row.is_active),
+      createdAt: Number(row.created_at) * 1000,
+    };
+  });
 }
 
 export async function savePurchase(ownerAddress: string, purchase: {

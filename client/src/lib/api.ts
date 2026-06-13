@@ -16,10 +16,13 @@ export type AgentStatus = {
 
 export type DatasetListing = {
   id: string;
+  listingId?: string;
   owner: string;
+  sellerAddress?: string;
   title: string;
   description: string;
   priceMist: number;
+  blobId?: string;
   blobIds: string[];
   chunkCount: number;
   sealPolicyId: string;
@@ -114,7 +117,7 @@ export const api = {
       body: JSON.stringify({ blobIds, policyId, metadata, priceMist }),
     }),
   indexListing: (data: { digest: string; blobId: string; policyId: string; title: string; description: string; priceMist: number; sellerAddress: string }) =>
-    request<{ message: string }>('/api/marketplace/indexed', {
+    request<{ success: boolean; listingId: string }>('/api/marketplace/list', {
       method: 'POST',
       body: JSON.stringify(data),
     }),

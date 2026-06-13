@@ -12,7 +12,7 @@ services:
       - /app/node_modules
       - sqlite_data:/app/data
     env_file:
-      - .env
+      - ./server/.env
 
   frontend:
     build:
@@ -30,11 +30,8 @@ services:
       - ./client/tsconfig.node.json:/app/tsconfig.node.json
 
       - /app/node_modules
-    env_file:
-      - .env
     depends_on:
       - backend
 
 volumes:
   sqlite_data:
-
