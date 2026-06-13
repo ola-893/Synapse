@@ -1,21 +1,14 @@
-// @ts-ignore
-import { SuiJsonRpcClient } from '@mysten/sui/jsonRpc';
+import { SuiJsonRpcClient, getJsonRpcFullnodeUrl } from '@mysten/sui/jsonRpc';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { env } from './env.js';
 import { SealClient } from '@mysten/seal';
 
-// Standard Sui Client
-const getBaseUrl = (network: string) => {
-  if (network === 'mainnet') return 'https://fullnode.mainnet.sui.io:443';
-  if (network === 'devnet') return 'https://fullnode.devnet.sui.io:443';
-  if (network === 'localnet') return 'http://127.0.0.1:9000';
-  return 'https://fullnode.testnet.sui.io:443'; // default testnet
-};
-
-export const suiClient = new SuiJsonRpcClient({ 
-  network: env.SUI_NETWORK as 'testnet' | 'mainnet' | 'devnet' | 'localnet',
-  url: getBaseUrl(env.SUI_NETWORK)
+// Standard Sui Client — using the JsonRpc client from @mysten/sui@2.17
+const network = env.SUI_NETWORK as 'testnet' | 'mainnet' | 'devnet' | 'localnet';
+export const suiClient = new SuiJsonRpcClient({
+  network,
+  url: getJsonRpcFullnodeUrl(network)
 });
 
 // Extended Sui Client with Seal SDK
