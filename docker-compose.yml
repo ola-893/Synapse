@@ -27,9 +27,9 @@ services:
       - ./client/tsconfig.json:/app/tsconfig.json
       - ./client/tsconfig.node.json:/app/tsconfig.node.json
       - ./client/vite.config.ts:/app/vite.config.ts
-      - ./client/tsconfig.node.json:/app/tsconfig.node.json
-
       - /app/node_modules
+    env_file:
+      - ./client/.env
     depends_on:
       - backend
 

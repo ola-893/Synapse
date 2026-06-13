@@ -1,7 +1,7 @@
 import { suiClient } from '../config/sui.ts';
 import { env, hasRealContracts } from '../config/env.ts';
 import { DatasetListing } from './types.ts';
-import { getCachedListings } from '../db/sqlite.ts';
+import { getCachedListings, saveCachedListing, clearCachedListings } from '../db/sqlite.ts';
 
 const MOCK_LISTING: DatasetListing = {
   id: "mock_listing_id_1",
@@ -131,4 +131,60 @@ export async function getPrice(listingId: string): Promise<number> {
 export async function getSeller(listingId: string): Promise<string> {
   const listing = await getListingById(listingId);
   return listing?.owner || "0x123";
+}
+
+/**
+ * Syncs listings from on-chain DatasetListed events into the local SQLite cache.
+ * Clears stale entries first, then re-populates with the real seller address.
+ */
+export async function syncListingsFromChain(): Promise<void> {
+  if (!hasRealContracts) {
+    console.log('[sync] No real contracts configured, skipping chain sync');
+    return;
+  }
+
+  console.log('[sync] Fetching DatasetListed events from chain...');
+  
+  const { data: events } = await suiClient.queryEvents({
+    query: { MoveEventType: `${env.SYNAPSE_PACKAGE_ID}::marketplace::DatasetListed` },
+    limit: 100,
+    order: 'descending',
+  });
+
+  console.log(`[sync] Found ${events.length} on-chain listing events`);
+  if (events.length === 0) return;
+
+  // Clear stale cached listings before re-populating
+  await clearCachedListings();
+
+  let synced = 0;
+  for (const event of events) {
+    const parsed = event.parsedJson as any;
+    if (!parsed?.listing_id) continue;
+
+    try {
+      const obj = await suiClient.getObject({
+        id: parsed.listing_id,
+        options: { showContent: true },
+      });
+      const fields = (obj.data?.content as any)?.fields;
+      if (!fields) continue;
+
+      await saveCachedListing({
+        listingId: parsed.listing_id,
+        title: decodeTextBytes(fields.title),
+        description: decodeTextBytes(fields.description),
+        priceMist: Number(fields.price_mist || 0),
+        blobId: fields.blob_ids?.length ? decodeTextBytes(fields.blob_ids[0]) : '',
+        policyId: decodeHexBytes(fields.seal_policy_id),
+        sellerAddress: fields.owner || parsed.owner, // real seller address from chain
+        isActive: fields.is_active !== false,
+      });
+      synced++;
+    } catch (err: any) {
+      console.warn(`[sync] Failed to fetch listing ${parsed.listing_id}:`, err.message);
+    }
+  }
+
+  console.log(`[sync] Chain sync complete — ${synced} listings cached`);
 }

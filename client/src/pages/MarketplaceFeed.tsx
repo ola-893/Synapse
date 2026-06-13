@@ -259,6 +259,7 @@ export default function MarketplaceFeedLegacy({ onRefreshWallet }: MarketplaceFe
                       backendPurchase.mutate(listing.id);
                     }}
                     disabled={!account || (backendPurchase.isPending && purchasingId === listing.id)}
+                    title={!account ? 'Connect your Sui wallet to purchase datasets for your agent' : undefined}
                     className="flex-1 sm:flex-none bg-white border-2 border-[#111312] hover:bg-[#EAEFEC] text-[#111312] px-4 py-2.5 font-mono text-[10px] font-extrabold uppercase tracking-wider cursor-pointer select-none transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
                   >
                     {purchasingId === listing.id && backendPurchase.isPending ? (

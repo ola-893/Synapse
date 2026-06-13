@@ -143,10 +143,16 @@ export async function saveCachedListing(data: {
   console.log(`[DB] Cached listing: "${data.title}" from seller ${data.sellerAddress}`);
 }
 
+export async function clearCachedListings() {
+  const database = await initDB();
+  const result = await database.run(`DELETE FROM cached_listings`);
+  console.log(`[DB] Cleared ${result.changes ?? 0} cached listings`);
+}
+
 export async function getCachedListings() {
   const database = await initDB();
   const rows = await database.all(
-    `SELECT * FROM cached_listings ORDER BY created_at DESC`
+    `SELECT * FROM cached_listings WHERE is_active = 1 ORDER BY created_at DESC`
   );
 
   return rows.map((row: any) => {

@@ -7,6 +7,8 @@ import { sealRouter } from './routes/seal.ts';
 import { marketplaceRouter } from './routes/marketplace.ts';
 import { startAgentLoop } from './agents/runtime.ts';
 import { requireX402Payment } from './x402/middleware.ts';
+import { initDB } from './db/sqlite.ts';
+import { syncListingsFromChain } from './marketplace/discovery.ts';
 
 const app = express();
 
@@ -39,6 +41,29 @@ app.use((req, res) => {
   res.status(404).json({ error: `Route not found: ${req.method} ${req.originalUrl}` });
 });
 
-app.listen(env.PORT, () => {
-  console.log(`Synapse server listening on port ${env.PORT}`);
+// ─── Bootstrap ───────────────────────────────────────────────
+async function bootstrap() {
+  // 1. Initialize database (creates tables if missing)
+  await initDB();
+
+  // 2. Sync listings from on-chain events (non-blocking)
+  syncListingsFromChain().catch(err =>
+    console.warn('[startup] Chain sync failed (non-fatal):', err.message || err)
+  );
+
+  // 3. Optionally auto-start the agent loop
+  if (env.AUTO_START) {
+    console.log('[startup] AUTO_START=true, starting agent loop...');
+    startAgentLoop();
+  }
+
+  // 4. Start the HTTP server
+  app.listen(env.PORT, () => {
+    console.log(`Synapse server listening on port ${env.PORT}`);
+  });
+}
+
+bootstrap().catch(err => {
+  console.error('[FATAL] Server bootstrap failed:', err);
+  process.exit(1);
 });

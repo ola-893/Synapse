@@ -1,4 +1,4 @@
-FROM node:20-alpine
+FROM node:20.11-alpine3.19
 
 # Install sqlite3 dependencies natively required by alpine
 RUN apk add --no-cache python3 make g++ 
