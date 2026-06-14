@@ -11,9 +11,9 @@ const envSchema = z.object({
   AGENT_WALLET_ENCRYPTION_KEY: z.string().min(32, "Encryption key must be at least 32 characters").default('1f9c8d7e6b5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a0f9e'),
 
   // MemWal
-  MEMWAL_DELEGATE_KEY: z.string().default(''),
+  MEMWAL_PRIVATE_KEY: z.string().default(''),
   MEMWAL_ACCOUNT_ID: z.string().default(''),
-  MEMWAL_SERVER_URL: z.string().default(''),
+  MEMWAL_SERVER_URL: z.string().default('https://relayer.memwal.ai'),
   MEMWAL_NAMESPACE: z.string().default('synapse-agent'),
 
   // Walrus
@@ -31,6 +31,7 @@ const envSchema = z.object({
 
   // AI
   GEMINI_API_KEY: z.string().default(''),
+  GOOGLE_GENERATIVE_AI_API_KEY: z.string().default(''),
 
   // Server
   STORAGE_DRIVER: z.enum(['walrus', 'mock']).default('mock'),
@@ -44,6 +45,6 @@ process.env.PORT = '3002';
 export const env = envSchema.parse(process.env);
 
 // Helper to check if we're running with real credentials
-export const hasMemWalCredentials = Boolean(env.MEMWAL_DELEGATE_KEY && env.MEMWAL_ACCOUNT_ID);
-export const hasGeminiKey = Boolean(env.GEMINI_API_KEY);
+export const hasMemWalCredentials = Boolean(env.MEMWAL_PRIVATE_KEY && env.MEMWAL_ACCOUNT_ID);
+export const hasGeminiKey = Boolean(env.GEMINI_API_KEY || env.GOOGLE_GENERATIVE_AI_API_KEY);
 export const hasRealContracts = !env.SYNAPSE_PACKAGE_ID.includes('placeholder');

@@ -14,7 +14,7 @@ import {
 
 import { useCurrentAccount, useSuiClient } from '@mysten/dapp-kit';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, type DatasetListing } from '../lib/api';
+import { api, type AgentLogEntry, type DatasetListing, type MemoryRecallResult } from '../lib/api';
 import { formatAddress, formatMist } from '../lib/sui';
 
 interface AgentWalletProps {
@@ -45,6 +45,47 @@ function evaluateListing(listing: DatasetListing) {
   return { matchesGoal, affordable, shouldBuy: matchesGoal && affordable };
 }
 
+const PHASE_COLORS: Record<string, string> = {
+  RECALL: '#00e5ff',
+  EVALUATE: '#ffd700',
+  PURCHASE: '#ff8c00',
+  DOWNLOAD: '#4DA2FF',
+  DECRYPT: '#b388ff',
+  SYNTHESIZE: '#69ff47',
+  REMEMBER: '#00ff88',
+  TICK_COMPLETE: '#ffffff',
+};
+
+function shortId(value?: string) {
+  if (!value) return '';
+  return value.length > 18 ? `${value.slice(0, 8)}...${value.slice(-6)}` : value;
+}
+
+function formatAgentLog(log: AgentLogEntry) {
+  if (log.phase === 'REMEMBER' && log.status === 'confirmed') {
+    return `MEMORY STORED blob_id=${shortId(log.blobId)} namespace=${log.namespace || '-'}`;
+  }
+  if (log.phase === 'EVALUATE') {
+    return `${log.decision || 'CHECK'} ${log.listing || ''} - ${log.reason || log.status || ''}`;
+  }
+  if (log.phase === 'PURCHASE') {
+    return `${log.status || 'pending'} ${log.txDigest ? `tx=${shortId(log.txDigest)}` : log.listing || ''}`;
+  }
+  if (log.phase === 'SYNTHESIZE') {
+    return typeof log.preview === 'string' ? log.preview : log.status || 'synthesizing';
+  }
+  if (log.phase === 'RECALL') {
+    return `${log.status || 'recall'} count=${log.count ?? 0}`;
+  }
+  if (log.phase === 'DOWNLOAD') {
+    return `${log.status || 'downloading'} ${log.bytes ? `${log.bytes} bytes` : shortId(log.blobId)}`;
+  }
+  if (log.phase === 'DECRYPT') {
+    return `${log.status || 'decrypting'} ${log.chars ? `${log.chars} chars` : ''}`;
+  }
+  return log.reason || log.message || log.result || log.status || '';
+}
+
 export default function AgentWallet({ wallet }: AgentWalletProps) {
   const account = useCurrentAccount();
   const isConnectedToSui = Boolean(account);
@@ -54,6 +95,9 @@ export default function AgentWallet({ wallet }: AgentWalletProps) {
 
 
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
+  const [memoryQuery, setMemoryQuery] = useState('SUI market signals');
+  const [memoryResults, setMemoryResults] = useState<MemoryRecallResult | null>(null);
+  const [memoryError, setMemoryError] = useState('');
 
   // ─── Queries ────────────────────────────────────────────────
   const queryClient = useQueryClient();
@@ -61,6 +105,8 @@ export default function AgentWallet({ wallet }: AgentWalletProps) {
 
   const health = useQuery({ queryKey: ['health'], queryFn: api.health, refetchInterval: 5000 });
   const status = useQuery({ queryKey: ['agent-status'], queryFn: api.agentStatus, refetchInterval: 5000 });
+  const agentLogs = useQuery({ queryKey: ['agent-logs'], queryFn: api.agentLogs, refetchInterval: 3000 });
+  const memoryHealth = useQuery({ queryKey: ['memory-health'], queryFn: api.memoryHealth, refetchInterval: 15000 });
   const listings = useQuery({ queryKey: ['marketplace-listings'], queryFn: api.listings, refetchInterval: 15000 });
   const vault = useQuery({ queryKey: ['seal-vault'], queryFn: api.sealVault, refetchInterval: 15000 });
 
@@ -69,6 +115,9 @@ export default function AgentWallet({ wallet }: AgentWalletProps) {
   const backendRegistered = Boolean(status.data?.agentAddress && status.data?.ownerAddress);
   const backendStatusLoading = status.isLoading;
   const activeListings = listings.data?.listings.filter((l) => l.isActive) ?? [];
+  const memoryLogEntries = agentLogs.data?.logs ?? [];
+  const storedMemoryCount = memoryLogEntries.filter((log) => log.phase === 'REMEMBER' && log.status === 'confirmed').length;
+  const latestRemember = [...memoryLogEntries].reverse().find((log) => log.phase === 'REMEMBER' && log.status === 'confirmed');
 
   // ─── Chain balance (real on-chain data) ─────────────────────
   const agentBalance = useQuery({
@@ -87,6 +136,22 @@ export default function AgentWallet({ wallet }: AgentWalletProps) {
   const stop = useMutation({
     mutationFn: api.stopAgent,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agent-status'] }),
+  });
+
+  const recallMemory = useMutation({
+    mutationFn: async () => {
+      if (!status.data?.agentAddress) throw new Error('Agent wallet is not ready yet.');
+      if (!memoryQuery.trim()) throw new Error('Enter a memory query.');
+      return api.recallMemory(memoryQuery.trim(), status.data.agentAddress, 5);
+    },
+    onSuccess: (result) => {
+      setMemoryError('');
+      setMemoryResults(result);
+    },
+    onError: (error) => {
+      setMemoryResults(null);
+      setMemoryError(error instanceof Error ? error.message : 'Memory recall failed.');
+    },
   });
 
   const initBackendWallet = useMutation({
@@ -138,7 +203,7 @@ export default function AgentWallet({ wallet }: AgentWalletProps) {
     const nextState = !toggleLoop;
     setToggleLoop(nextState);
     try {
-      if (nextState) await start.mutateAsync();
+      if (nextState) await start.mutateAsync(undefined);
       else await stop.mutateAsync();
     } catch (e) {
       setToggleLoop(!nextState); // revert on error
@@ -535,6 +600,140 @@ export default function AgentWallet({ wallet }: AgentWalletProps) {
                   </div>
                 ))
               )}
+            </div>
+          </div>
+
+          {/* ── Memory Core ── */}
+          <div className="bg-white border-2 border-[#111312] shadow-md">
+            <div className="border-b border-[#111312]/20 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-[#111312] text-white">
+              <div>
+                <span className="font-mono text-[10px] sm:text-xs uppercase tracking-widest flex items-center font-black">
+                  <Terminal className="w-4 h-4 mr-2 text-[#00ff88] flex-shrink-0" />
+                  MEMORY_CORE
+                </span>
+                <p className="text-[10px] text-zinc-400 mt-1 font-serif italic">
+                  Persistent MemWal recall, synthesis, and Walrus proof stream.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[9px] uppercase text-zinc-400 font-black">MEMORIES</span>
+                <span className="font-mono text-lg text-[#00ff88] font-black">{storedMemoryCount}</span>
+              </div>
+            </div>
+
+            {latestRemember ? (
+              <div className="m-4 border-2 border-[#00ff88] bg-emerald-50 p-4">
+                <p className="font-mono text-[10px] text-emerald-900 uppercase font-black tracking-widest">
+                  MEMORY STORED
+                </p>
+                <p className="mt-1 font-mono text-xs text-[#111312] break-all">
+                  blob_id={latestRemember.blobId}
+                </p>
+                {latestRemember.walrusUrl ? (
+                  <a
+                    href={latestRemember.walrusUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-block font-mono text-[10px] uppercase font-black text-emerald-900 underline"
+                  >
+                    Open Walrus proof
+                  </a>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="p-4 grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <div className="bg-[#111312] border-2 border-[#111312] p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="font-mono text-[10px] text-zinc-400 uppercase font-black tracking-widest">
+                    Event Stream
+                  </span>
+                  <span className="font-mono text-[8px] text-zinc-500 uppercase font-bold">
+                    {memoryHealth.data?.status === 'ok' ? 'MEMWAL ONLINE' : memoryHealth.data?.status || 'CHECKING'}
+                  </span>
+                </div>
+
+                <div className="h-[260px] overflow-y-auto space-y-2 font-mono text-[10px]">
+                  {memoryLogEntries.length ? (
+                    memoryLogEntries.slice(-40).map((log, index) => (
+                      <div
+                        key={`${log.timestamp}-${index}`}
+                        className={`border-l-2 pl-3 py-2 bg-white/5 ${
+                          log.phase === 'REMEMBER' && log.status === 'confirmed' ? 'ring-1 ring-[#00ff88]/70' : ''
+                        }`}
+                        style={{ borderLeftColor: PHASE_COLORS[log.phase] || '#ffffff' }}
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-zinc-500">{new Date(log.timestamp).toLocaleTimeString()}</span>
+                          <span className="font-black uppercase" style={{ color: PHASE_COLORS[log.phase] || '#ffffff' }}>
+                            {log.phase}
+                          </span>
+                          {log.status ? <span className="text-zinc-400 uppercase">{log.status}</span> : null}
+                        </div>
+                        <p className="mt-1 text-zinc-200 leading-relaxed">{formatAgentLog(log)}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-zinc-600 py-16 text-center uppercase tracking-wider font-bold">
+                      [ NO AGENT MEMORY EVENTS YET ]
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="border-2 border-[#111312] p-4 bg-[#EAEFEC]">
+                <span className="font-mono text-[10px] text-[#111312] uppercase font-black tracking-widest">
+                  Query Memory
+                </span>
+                <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={memoryQuery}
+                    onChange={(event) => setMemoryQuery(event.target.value)}
+                    className="flex-1 bg-white border-2 border-[#111312] p-2 font-mono text-xs focus:outline-none"
+                    placeholder="SUI market signals"
+                  />
+                  <button
+                    onClick={() => recallMemory.mutate()}
+                    disabled={recallMemory.isPending || !status.data?.agentAddress}
+                    className="bg-[#111312] text-white border-2 border-[#111312] px-4 py-2 font-mono text-[10px] font-black uppercase disabled:opacity-50"
+                  >
+                    {recallMemory.isPending ? 'QUERYING' : 'RECALL'}
+                  </button>
+                </div>
+
+                {memoryError ? (
+                  <p className="mt-3 border-2 border-red-300 bg-red-50 p-2 text-[10px] font-mono text-red-800 font-bold">
+                    {memoryError}
+                  </p>
+                ) : null}
+
+                <div className="mt-4 space-y-3 max-h-[220px] overflow-y-auto">
+                  {memoryResults?.memories.length ? (
+                    memoryResults.memories.map((memory) => (
+                      <div key={memory.blob_id} className="bg-white border border-[#111312]/25 p-3">
+                        <div className="flex justify-between gap-3 mb-2">
+                          <span className="font-mono text-[8px] uppercase font-black text-zinc-500">
+                            {shortId(memory.blob_id)}
+                          </span>
+                          <span className="font-mono text-[8px] uppercase font-black text-[#111312]">
+                            distance {memory.distance.toFixed(3)}
+                          </span>
+                        </div>
+                        <p className="text-xs text-zinc-700 font-serif leading-relaxed">{memory.text}</p>
+                      </div>
+                    ))
+                  ) : memoryResults ? (
+                    <p className="text-[10px] font-mono text-zinc-500 uppercase font-bold">
+                      No memories matched that query.
+                    </p>
+                  ) : (
+                    <p className="text-[10px] font-mono text-zinc-500 uppercase font-bold">
+                      Enter a topic to recall this agent's MemWal knowledge.
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 

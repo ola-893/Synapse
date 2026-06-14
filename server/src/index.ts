@@ -54,7 +54,9 @@ async function bootstrap() {
   // 3. Optionally auto-start the agent loop
   if (env.AUTO_START) {
     console.log('[startup] AUTO_START=true, starting agent loop...');
-    startAgentLoop();
+    await startAgentLoop().catch((err) => {
+      console.warn('[startup] AUTO_START skipped:', err.message || err);
+    });
   }
 
   // 4. Start the HTTP server

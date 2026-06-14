@@ -1,20 +1,41 @@
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import cron from 'node-cron';
-import { getMemWal } from '../config/memwal.ts';
-import { secureRemember } from '../memwal/manual.ts';
 import { getActiveListings } from '../marketplace/discovery.ts';
-import { purchaseDataset, ingestDataset } from '../marketplace/buyer.ts';
-import { saveAgentWallet, getAgentWallet, savePurchase } from '../db/sqlite.ts';
+import { purchaseDatasetWithReceipt } from '../marketplace/buyer.ts';
+import { saveAgentWallet, getAgentWallet, savePurchase, hasPurchased } from '../db/sqlite.ts';
+import type { AgentLogEvent, DatasetListing } from '../marketplace/types.ts';
+import { getMemWalClient, agentNamespace, isMemWalConfigured } from '../memory/memwal.ts';
+import { synthesizeDataset, evaluateListingWithMemory } from '../memory/synthesizer.ts';
+import { sealDecrypt } from '../seal/decrypt.ts';
+import { createSessionKey, buildApprovalTransaction } from '../seal/session.ts';
+import { env } from '../config/env.ts';
 
 let activeTask: cron.ScheduledTask | null = null;
 let lastTickTime: Date | null = null;
 let isRunning = false;
+let isTickInProgress = false;
 let tickCount = 0;
 
 // The active owner connected via the dashboard
 let activeOwnerAddress: string | null = null;
 
 import { initializeKeypair } from '../config/sui.ts';
+
+const MAX_LOG_EVENTS = 100;
+const logBuffer: Array<AgentLogEvent & { timestamp: string }> = [];
+
+function createEmitter(): (event: AgentLogEvent) => void {
+  return (event: AgentLogEvent) => {
+    const entry = { ...event, timestamp: new Date().toISOString() };
+    logBuffer.push(entry);
+    if (logBuffer.length > MAX_LOG_EVENTS) logBuffer.shift();
+    console.log(`[Agent] ${event.phase}:`, JSON.stringify(event));
+  };
+}
+
+export function getAgentLogs(): Array<AgentLogEvent & { timestamp: string }> {
+  return [...logBuffer];
+}
 
 export async function getActiveAgentKeypair(): Promise<Ed25519Keypair | null> {
   if (!activeOwnerAddress) return null;
@@ -24,104 +45,217 @@ export async function getActiveAgentKeypair(): Promise<Ed25519Keypair | null> {
   return initializeKeypair(wallet.privateKeyStr);
 }
 
-/**
- * AI Brain evaluates if a dataset is worth purchasing.
- * Uses broad keyword matching and a reasonable price ceiling.
- * In production, this would call Gemini for semantic evaluation.
- */
-async function evaluateDatasetValue(listing: any): Promise<{ shouldBuy: boolean; reason: string }> {
-  // Price gate: reject anything over 1 SUI (1_000_000_000 MIST)
-  if (listing.priceMist > 1_000_000_000) {
-    return { shouldBuy: false, reason: `Price ${listing.priceMist} MIST exceeds 1 SUI budget cap` };
-  }
-  
-  const text = (listing.title + ' ' + listing.description).toLowerCase();
-  const VALUABLE_KEYWORDS = [
-    'data', 'signal', 'alpha', 'metric', 'analysis', 'research',
-    'trading', 'defi', 'model', 'prediction', 'dataset', 'report',
-    'neuro', 'genomic', 'climate', 'financial', 'market', 'flux',
-    'salinity', 'survey', 'sensor', 'log', 'profile', 'volumetric',
-  ];
-  const matched = VALUABLE_KEYWORDS.filter(kw => text.includes(kw));
-  
-  if (matched.length > 0) {
-    return { shouldBuy: true, reason: `Matched keywords: ${matched.join(', ')}` };
-  }
-  
-  // Default: buy cheap datasets (< 0.1 SUI) even without keyword match
-  if (listing.priceMist <= 100_000_000) {
-    return { shouldBuy: true, reason: 'Low-cost dataset, auto-approved for exploration' };
-  }
-  
-  return { shouldBuy: false, reason: 'No valuable keywords found and price above auto-buy threshold' };
+async function decryptWithSeal(
+  listing: DatasetListing,
+  agentKeypair: Ed25519Keypair,
+  rawBytes: Uint8Array,
+  receiptId: string
+): Promise<string> {
+  const agentAddress = agentKeypair.getPublicKey().toSuiAddress();
+  const sessionKey = await createSessionKey(agentAddress, agentKeypair);
+  const txBytes = await buildApprovalTransaction(listing.id, receiptId, agentAddress, listing.sealPolicyId);
+  return sealDecrypt(rawBytes, sessionKey, txBytes);
 }
 
-/**
- * The core agent execution loop.
- */
-async function executeAgentTick() {
+async function runActiveAgentTick() {
+  if (isTickInProgress) {
+    createEmitter()({ phase: 'TICK_COMPLETE', result: 'skipped', reason: 'Previous tick still in progress' });
+    return;
+  }
+
+  isTickInProgress = true;
   tickCount++;
   console.log(`\n--- [Agent Tick #${tickCount}] Waking up at ${new Date().toISOString()} ---`);
   lastTickTime = new Date();
 
   try {
     if (!activeOwnerAddress) throw new Error('No active owner set for the runtime.');
-    
-    // Retrieve and decrypt the wallet on-the-fly
+
     const walletData = await getAgentWallet(activeOwnerAddress);
     if (!walletData) throw new Error('Agent wallet not found in database for owner');
-    
+
     const agentKeypair = initializeKeypair(walletData.privateKeyStr);
-    const currentAgentAddress = walletData.agentAddress;
-
-    // 1. RECALL context before execution
-    console.log(`[Agent] Recalling context from MemWal...`);
-    const pastStrategies = await getMemWal(currentAgentAddress).recall("alpha trading signals");
-    console.log(`[Agent] Recalled ${pastStrategies?.length || 0} memories for context.`);
-
-    // 2. DISCOVER new listings on the marketplace
-    console.log(`[Agent] Scanning marketplace for new knowledge...`);
-    const listings = await getActiveListings();
-    console.log(`[Agent] Found ${listings.length} active listings.`);
-
-    // 3. EVALUATE & PURCHASE
-    for (const listing of listings) {
-      // In a real app we'd check if we already bought it to prevent duplicate purchases.
-      const evaluation = await evaluateDatasetValue(listing);
-      if (evaluation.shouldBuy) {
-        console.log(`[Agent] AI Brain decided to purchase dataset: "${listing.title}" — Reason: ${evaluation.reason}`);
-        try {
-          const receiptId = await purchaseDataset(listing, agentKeypair);
-          console.log(`[Agent] Ingesting purchased knowledge...`);
-          await ingestDataset(listing, receiptId, agentKeypair);
-          console.log(`[Agent] Successfully learned new knowledge from marketplace!`);
-          
-          // Save purchase to history (Bug #6)
-          await savePurchase(activeOwnerAddress!, {
-            listingId: listing.id,
-            listingTitle: listing.title,
-            amountMist: listing.priceMist,
-            receiptId,
-          });
-          
-          // Log the acquisition
-          await getMemWal(currentAgentAddress).remember(`Purchased and ingested dataset: ${listing.title} for ${listing.priceMist} MIST.`);
-        } catch (e: any) {
-          console.error(`[Agent] Failed to purchase/ingest dataset:`, e.message);
-        }
-      } else {
-        console.log(`[Agent] Skipped dataset: "${listing.title}" — Reason: ${evaluation.reason}`);
-      }
-    }
-
-    // 4. SECURE REMEMBER: Encrypt sensitive execution logs
-    const sensitiveLog = `PROPRIETARY STATE: Agent tick #${tickCount} completed. Balance remains healthy.`;
-    const secureBlobId = await secureRemember(sensitiveLog);
-    console.log(`[Agent] Saved sensitive state to Walrus with Seal encryption. Blob ID: ${secureBlobId}`);
-
+    await executeAgentTick(walletData.agentAddress, agentKeypair, createEmitter());
   } catch (error) {
     console.error('[Agent] Error during tick:', error);
+    createEmitter()({ phase: 'TICK_COMPLETE', result: 'error', error: String(error) });
+  } finally {
+    isTickInProgress = false;
   }
+}
+
+export async function executeAgentTick(
+  agentAddress: string,
+  agentKeypair: Ed25519Keypair,
+  emitLog: (event: AgentLogEvent) => void
+): Promise<void> {
+  const namespace = agentNamespace(agentAddress);
+  const memwalEnabled = isMemWalConfigured();
+  const listings = await getActiveListings();
+
+  // Phase 1: recall
+  let existingMemories: Array<{ text: string; distance: number; blob_id: string }> = [];
+  if (memwalEnabled) {
+    try {
+      const client = getMemWalClient();
+      const topicQuery = listings.slice(0, 5).map((listing) => listing.title).join(', ') || 'Synapse marketplace knowledge';
+      const recalled = await client.recall({ query: topicQuery, limit: 5, namespace });
+      existingMemories = recalled.results;
+      emitLog({
+        phase: 'RECALL',
+        status: existingMemories.length > 0 ? 'memories_found' : 'no_memories',
+        count: existingMemories.length,
+        preview: existingMemories.map((memory) => memory.text.slice(0, 80)),
+      });
+    } catch (err) {
+      emitLog({ phase: 'RECALL', status: 'error', error: String(err) });
+    }
+  } else {
+    emitLog({ phase: 'RECALL', status: 'disabled', reason: 'MEMWAL_PRIVATE_KEY or MEMWAL_ACCOUNT_ID not set' });
+  }
+
+  // Phase 2: evaluate
+  if (!listings.length) {
+    emitLog({ phase: 'EVALUATE', status: 'no_listings' });
+    return;
+  }
+
+  let targetListing: DatasetListing | null = null;
+  let buyReason = '';
+
+  for (const listing of listings) {
+    const listingId = listing.listingId || listing.id;
+    const alreadyPurchased = await hasPurchased(agentAddress, listingId);
+    if (alreadyPurchased) {
+      emitLog({
+        phase: 'EVALUATE',
+        listing: listing.title,
+        decision: 'SKIP',
+        reason: 'Already purchased by this agent',
+        memoryContext: 'local purchase history',
+      });
+      continue;
+    }
+
+    const { shouldBuy, reason, memoryContext } = await evaluateListingWithMemory(listing, namespace);
+    emitLog({
+      phase: 'EVALUATE',
+      listing: listing.title,
+      decision: shouldBuy ? 'BUY' : 'SKIP',
+      reason,
+      memoryContext,
+    });
+
+    if (shouldBuy) {
+      targetListing = listing;
+      buyReason = reason;
+      break;
+    }
+  }
+
+  if (!targetListing) {
+    emitLog({
+      phase: 'TICK_COMPLETE',
+      result: 'no_action',
+      reason: 'All listings evaluated - memory sufficient or no value found',
+    });
+    return;
+  }
+
+  const targetListingId = targetListing.listingId || targetListing.id;
+  const targetBlobId = targetListing.blobId || targetListing.blobIds[0] || '';
+
+  // Phase 3: purchase
+  emitLog({ phase: 'PURCHASE', listing: targetListing.title, priceMist: targetListing.priceMist, reason: buyReason });
+  let txDigest = '';
+  let receiptId = '';
+  try {
+    const purchase = await purchaseDatasetWithReceipt(targetListing, agentKeypair);
+    txDigest = purchase.txDigest;
+    receiptId = purchase.receiptId;
+    emitLog({ phase: 'PURCHASE', status: 'confirmed', txDigest, receiptId });
+  } catch (err) {
+    emitLog({ phase: 'PURCHASE', status: 'failed', error: String(err) });
+    emitLog({ phase: 'TICK_COMPLETE', result: 'purchase_failed', listing: targetListing.title, error: String(err) });
+    return;
+  }
+
+  // Phase 4: download
+  emitLog({ phase: 'DOWNLOAD', blobId: targetBlobId });
+  let rawBytes: Uint8Array;
+  try {
+    const response = await fetch(`${env.WALRUS_AGGREGATOR_URL.replace(/\/$/, '')}/v1/blobs/${targetBlobId}`);
+    if (!response.ok) throw new Error(`Walrus HTTP ${response.status}`);
+    rawBytes = new Uint8Array(await response.arrayBuffer());
+    emitLog({ phase: 'DOWNLOAD', status: 'success', bytes: rawBytes.length });
+  } catch (err) {
+    emitLog({ phase: 'DOWNLOAD', status: 'failed', error: String(err) });
+    await savePurchase(agentAddress, {
+      listingId: targetListingId,
+      listingTitle: targetListing.title,
+      amountMist: targetListing.priceMist,
+      receiptId,
+      txDigest,
+    });
+    emitLog({ phase: 'TICK_COMPLETE', result: 'download_failed', listing: targetListing.title, error: String(err) });
+    return;
+  }
+
+  // Phase 5: decrypt
+  let content: string;
+  try {
+    content = await decryptWithSeal(targetListing, agentKeypair, rawBytes, receiptId);
+    emitLog({ phase: 'DECRYPT', status: 'seal_success', chars: content.length });
+  } catch {
+    content = Buffer.from(rawBytes).toString('utf-8');
+    emitLog({ phase: 'DECRYPT', status: 'plaintext_fallback', chars: content.length });
+  }
+
+  // Phase 6: synthesize
+  emitLog({ phase: 'SYNTHESIZE', listing: targetListing.title });
+  const synthesis = await synthesizeDataset(targetListing.title, content);
+  emitLog({ phase: 'SYNTHESIZE', status: 'complete', preview: synthesis.slice(0, 150) });
+
+  // Phase 7: remember
+  let memoryBlobId: string | undefined;
+  if (memwalEnabled) {
+    try {
+      const client = getMemWalClient();
+      const memoryText = `[Dataset: ${targetListing.title}] Key insights: ${synthesis}`;
+      emitLog({ phase: 'REMEMBER', status: 'storing', namespace });
+      const result = await client.rememberAndWait(memoryText, namespace);
+      memoryBlobId = result.blob_id;
+      emitLog({
+        phase: 'REMEMBER',
+        status: 'confirmed',
+        blobId: result.blob_id,
+        walrusUrl: `https://walruscan.com/testnet/blob/${result.blob_id}`,
+        namespace,
+        message: 'Memory permanently stored on Walrus. Agent is now smarter.',
+      });
+    } catch (err) {
+      emitLog({ phase: 'REMEMBER', status: 'failed', error: String(err) });
+    }
+  } else {
+    emitLog({ phase: 'REMEMBER', status: 'disabled', reason: 'MemWal not configured' });
+  }
+
+  await savePurchase(agentAddress, {
+    listingId: targetListingId,
+    listingTitle: targetListing.title,
+    amountMist: targetListing.priceMist,
+    receiptId,
+    txDigest,
+    memoryBlobId,
+  });
+
+  emitLog({
+    phase: 'TICK_COMPLETE',
+    result: 'knowledge_acquired',
+    listing: targetListing.title,
+    memoryStored: Boolean(memoryBlobId),
+    memoryBlobId,
+  });
 }
 
 export async function registerAgent(config: { ownerPublicKey: string }): Promise<{ agentAddress: string }> {
@@ -148,16 +282,22 @@ export async function registerAgent(config: { ownerPublicKey: string }): Promise
   return { agentAddress };
 }
 
-export function startAgentLoop() {
+export async function startAgentLoop(ownerAddress?: string) {
+  if (ownerAddress) {
+    await registerAgent({ ownerPublicKey: ownerAddress });
+  }
+  if (!activeOwnerAddress) {
+    throw new Error('Register an agent before starting the autonomous loop.');
+  }
   if (isRunning) return;
   console.log('Starting Synapse Agent Runtime (1-minute intervals)...');
   
   // Run every minute
-  activeTask = cron.schedule('* * * * *', executeAgentTick);
+  activeTask = cron.schedule('* * * * *', runActiveAgentTick);
   isRunning = true;
   
   // Trigger first tick immediately
-  executeAgentTick();
+  runActiveAgentTick();
 }
 
 export function stopAgentLoop() {

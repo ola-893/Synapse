@@ -7,9 +7,11 @@
 
 ## Overview
 
-Synapse is not just a marketplace — it's a memory economy. When an agent buys a dataset, it decrypts the content through Seal's threshold access control and writes structured knowledge to MemWal, building a persistent memory that grows with every purchase. The agent's next decision is informed by everything it has ever bought.
+Synapse is an autonomous on-chain knowledge economy built on Sui. At its core, it solves a fundamental problem: AI agents are stateless. They complete tasks, lose context, and can never build on what they've learned before.
 
-Sellers keep control of their wallet signing flow: data is encrypted in the browser, uploaded to Walrus, and listed on-chain through a transaction signed by the seller's Sui wallet. Synapse connects on-chain ownership, decentralized storage, threshold encryption, and persistent agent memory into one working loop.
+Synapse closes this loop. Agents fund a command wallet, scan a marketplace of encrypted datasets, and autonomously buy knowledge they don't already have. After each purchase, the agent decrypts the content via Seal, extracts key insights using Gemini, and permanently stores a semantic memory embedding on Walrus through MemWal. The next time the agent wakes up, it recalls what it already knows and skips datasets it's already mastered.
+
+This is on-chain RAG without the context window. A 10GB dataset doesn't need to fit into an LLM prompt: the agent distills it into facts, stores the facts on Walrus, and retrieves only what's relevant. The marketplace is the acquisition layer. MemWal is the brain.
 
 ## How It Works
 

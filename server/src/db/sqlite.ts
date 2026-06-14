@@ -58,9 +58,12 @@ export async function initDB() {
       amount_mist INTEGER NOT NULL,
       receipt_id TEXT,
       tx_digest TEXT,
+      memory_blob_id TEXT,
       purchased_at INTEGER DEFAULT (cast(strftime('%s', 'now') as int))
     )
   `);
+
+  await ensureColumn('agent_purchases', 'memory_blob_id', 'TEXT');
 
   console.log(`[DB] Database initialized successfully`);
   return db;
@@ -181,19 +184,44 @@ export async function savePurchase(ownerAddress: string, purchase: {
   amountMist: number;
   receiptId?: string;
   txDigest?: string;
+  memoryBlobId?: string;
 }) {
   const database = await initDB();
   await database.run(
-    `INSERT INTO agent_purchases (owner_address, listing_id, listing_title, amount_mist, receipt_id, tx_digest)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [ownerAddress, purchase.listingId, purchase.listingTitle, purchase.amountMist, purchase.receiptId || null, purchase.txDigest || null]
+    `INSERT INTO agent_purchases (owner_address, listing_id, listing_title, amount_mist, receipt_id, tx_digest, memory_blob_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      ownerAddress,
+      purchase.listingId,
+      purchase.listingTitle,
+      purchase.amountMist,
+      purchase.receiptId || null,
+      purchase.txDigest || null,
+      purchase.memoryBlobId || null,
+    ]
   );
+}
+
+export async function hasPurchased(ownerAddress: string, listingId?: string | null) {
+  if (!listingId) return false;
+  const database = await initDB();
+  const row = await database.get(
+    `SELECT 1 FROM agent_purchases WHERE owner_address = ? AND listing_id = ? LIMIT 1`,
+    [ownerAddress, listingId]
+  );
+  return Boolean(row);
 }
 
 export async function getPurchases(ownerAddress: string) {
   const database = await initDB();
-  return database.all(
-    `SELECT * FROM agent_purchases WHERE owner_address = ? ORDER BY purchased_at DESC`,
+  const wallet = await database.get(
+    `SELECT agent_address FROM agent_wallets WHERE owner_address = ?`,
     [ownerAddress]
+  );
+  const addresses = wallet?.agent_address ? [ownerAddress, wallet.agent_address] : [ownerAddress];
+  const placeholders = addresses.map(() => '?').join(', ');
+  return database.all(
+    `SELECT * FROM agent_purchases WHERE owner_address IN (${placeholders}) ORDER BY purchased_at DESC`,
+    addresses
   );
 }

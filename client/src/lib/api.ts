@@ -14,6 +14,47 @@ export type AgentStatus = {
   agentAddress?: string | null;
 };
 
+export type AgentLogPhase =
+  | 'RECALL'
+  | 'EVALUATE'
+  | 'PURCHASE'
+  | 'DOWNLOAD'
+  | 'DECRYPT'
+  | 'SYNTHESIZE'
+  | 'REMEMBER'
+  | 'TICK_COMPLETE';
+
+export type AgentLogEntry = {
+  phase: AgentLogPhase;
+  timestamp: string;
+  status?: string;
+  listing?: string;
+  decision?: 'BUY' | 'SKIP';
+  reason?: string;
+  count?: number;
+  preview?: string | string[];
+  blobId?: string;
+  txDigest?: string;
+  receiptId?: string;
+  memoryBlobId?: string;
+  walrusUrl?: string;
+  namespace?: string;
+  message?: string;
+  bytes?: number;
+  chars?: number;
+  priceMist?: number;
+  error?: string;
+  memoryContext?: string;
+  result?: string;
+  memoryStored?: boolean;
+};
+
+export type MemoryRecallResult = {
+  memories: Array<{ blob_id: string; text: string; distance: number }>;
+  namespace: string;
+  total: number;
+};
+
 export type DatasetListing = {
   id: string;
   listingId?: string;
@@ -81,8 +122,12 @@ export const api = {
     }),
 
   agentStatus: () => request<AgentStatus>('/api/agent/status'),
-  startAgent: () => request<{ message: string }>('/api/agent/start', { method: 'POST' }),
+  startAgent: (ownerAddress?: string) => request<{ message: string }>('/api/agent/start', {
+    method: 'POST',
+    body: ownerAddress ? JSON.stringify({ ownerAddress }) : undefined,
+  }),
   stopAgent: () => request<{ message: string }>('/api/agent/stop', { method: 'POST' }),
+  agentLogs: () => request<{ logs: AgentLogEntry[] }>('/api/agent/logs'),
   registerAgent: (ownerPublicKey: string) => 
     request<{ message: string; agentAddress: string }>('/api/agent/register', { 
       method: 'POST', body: JSON.stringify({ ownerPublicKey }) 
@@ -94,11 +139,16 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ text, secure }),
     }),
-  recall: (query: string, secure: boolean) =>
-    request<{ memories?: unknown[]; message?: string; blobIds?: string[] }>('/api/memory/recall', {
+  recall: (query: string, agentAddress: string) =>
+    request<MemoryRecallResult>('/api/memory/recall', {
       method: 'POST',
-      body: JSON.stringify({ query, secure }),
+      body: JSON.stringify({ query, agentAddress }),
     }),
+  memoryHealth: () => request<{ status: string; relayer?: unknown; message?: string; error?: string }>('/api/memory/health'),
+  recallMemory: (query: string, agentAddress: string, limit = 5) =>
+    request<MemoryRecallResult>(
+      `/api/memory/recall?query=${encodeURIComponent(query)}&agentAddress=${encodeURIComponent(agentAddress)}&limit=${limit}`
+    ),
   restoreMemory: () => request<{ message: string }>('/api/memory/restore', { method: 'POST' }),
 
   sealVault: () =>

@@ -14,6 +14,31 @@ export interface DatasetListing {
   createdAt: number;
 }
 
+export interface AgentLogEvent {
+  phase: 'RECALL' | 'EVALUATE' | 'PURCHASE' | 'DOWNLOAD' | 'DECRYPT' | 'SYNTHESIZE' | 'REMEMBER' | 'TICK_COMPLETE';
+  status?: string;
+  listing?: string;
+  decision?: 'BUY' | 'SKIP';
+  reason?: string;
+  count?: number;
+  preview?: string | string[];
+  blobId?: string;
+  txDigest?: string;
+  receiptId?: string;
+  memoryBlobId?: string;
+  walrusUrl?: string;
+  namespace?: string;
+  message?: string;
+  bytes?: number;
+  chars?: number;
+  priceMist?: number;
+  error?: string;
+  memoryContext?: string;
+  result?: string;
+  memoryStored?: boolean;
+  [key: string]: unknown;
+}
+
 export interface PurchaseReceipt {
   id: string; // The object ID of the soulbound receipt
   listingId: string;

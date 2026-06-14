@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { startAgentLoop, stopAgentLoop, getAgentStatus, registerAgent } from '../agents/runtime.ts';
+import { startAgentLoop, stopAgentLoop, getAgentStatus, registerAgent, getAgentLogs } from '../agents/runtime.ts';
 import { getAgentWallet, getPurchases } from '../db/sqlite.ts';
 
 export const agentRouter = Router();
@@ -34,9 +34,9 @@ agentRouter.get('/wallet', async (req, res) => {
   res.json({ publicKey: status.agentAddress });
 });
 
-agentRouter.post('/start', (req, res) => {
+agentRouter.post('/start', async (req, res) => {
   try {
-    startAgentLoop();
+    await startAgentLoop(req.body?.ownerAddress || req.body?.ownerPublicKey);
     res.json({ message: 'Agent started' });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -54,6 +54,10 @@ agentRouter.post('/stop', (req, res) => {
 
 agentRouter.get('/status', async (req, res) => {
   res.json(await getAgentStatus());
+});
+
+agentRouter.get('/logs', (_req, res) => {
+  res.json({ logs: getAgentLogs() });
 });
 
 agentRouter.get('/purchases', async (req, res) => {

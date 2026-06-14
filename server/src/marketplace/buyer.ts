@@ -12,7 +12,10 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 /**
  * Purchases a dataset on-chain.
  */
-export async function purchaseDataset(listing: DatasetListing, agentKeypair: Ed25519Keypair): Promise<string> {
+export async function purchaseDatasetWithReceipt(
+  listing: DatasetListing,
+  agentKeypair: Ed25519Keypair
+): Promise<{ receiptId: string; txDigest: string }> {
   const agentAddress = agentKeypair.getPublicKey().toSuiAddress();
   
   // Pre-flight balance check to avoid cryptic "No valid gas coins" error
@@ -60,7 +63,12 @@ export async function purchaseDataset(listing: DatasetListing, agentKeypair: Ed2
   const receiptRef = createdObjects.find((c: any) => c.owner?.AddressOwner === agentAddress);
   if (!receiptRef) throw new Error("Purchase receipt not found in tx effects");
   
-  return receiptRef.reference.objectId;
+  return { receiptId: receiptRef.reference.objectId, txDigest: digest };
+}
+
+export async function purchaseDataset(listing: DatasetListing, agentKeypair: Ed25519Keypair): Promise<string> {
+  const { receiptId } = await purchaseDatasetWithReceipt(listing, agentKeypair);
+  return receiptId;
 }
 
 /**
