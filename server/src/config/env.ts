@@ -22,7 +22,6 @@ const envSchema = z.object({
 
   // Synapse Contracts
   SYNAPSE_PACKAGE_ID: z.string().default('0x_placeholder_synapse_package_id'),
-  MARKETPLACE_REGISTRY_ID: z.string().default('0x_placeholder_marketplace_id'),
 
   // Seal
   SEAL_PACKAGE_ID: z.string().default('0x984960ebddd75c15c6d38355ac462621db0ffc7d6647214c802cd3b685e1af3d'),
