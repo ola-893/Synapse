@@ -184,11 +184,29 @@ export async function executeAgentTick(
   emitLog({ phase: 'DOWNLOAD', blobId: targetBlobId });
   let rawBytes: Uint8Array;
   try {
-    const response = await fetch(`${env.WALRUS_AGGREGATOR_URL.replace(/\/$/, '')}/v1/blobs/${targetBlobId}`);
-    if (!response.ok) throw new Error(`Walrus HTTP ${response.status}`);
+    const walrusUrl = `${env.WALRUS_AGGREGATOR_URL.replace(/\/$/, '')}/v1/blobs/${targetBlobId}`;
+    console.log(`[DOWNLOAD DEBUG] Full URL: ${walrusUrl}`);
+    console.log(`[DOWNLOAD DEBUG] WALRUS_AGGREGATOR_URL from env: ${env.WALRUS_AGGREGATOR_URL}`);
+    
+    const response = await fetch(walrusUrl);
+    console.log(`[DOWNLOAD DEBUG] HTTP Status: ${response.status}`);
+    console.log(`[DOWNLOAD DEBUG] HTTP Status Text: ${response.statusText}`);
+    console.log(`[DOWNLOAD DEBUG] Response Headers:`, Object.fromEntries(response.headers.entries()));
+    
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => 'Could not read error body');
+      console.log(`[DOWNLOAD DEBUG] Error Response Body: ${errorBody}`);
+      throw new Error(`Walrus HTTP ${response.status}: ${response.statusText} - Body: ${errorBody}`);
+    }
+    
     rawBytes = new Uint8Array(await response.arrayBuffer());
     emitLog({ phase: 'DOWNLOAD', status: 'success', bytes: rawBytes.length });
   } catch (err) {
+    console.error(`[DOWNLOAD DEBUG] Raw error object:`, err);
+    console.error(`[DOWNLOAD DEBUG] Error stack trace:`, err instanceof Error ? err.stack : 'No stack trace');
+    console.error(`[DOWNLOAD DEBUG] Error name:`, err instanceof Error ? err.name : 'Unknown');
+    console.error(`[DOWNLOAD DEBUG] Error message:`, err instanceof Error ? err.message : String(err));
+    
     emitLog({ phase: 'DOWNLOAD', status: 'failed', error: String(err) });
     await savePurchase(agentAddress, {
       listingId: targetListingId,
@@ -206,9 +224,20 @@ export async function executeAgentTick(
   try {
     content = await decryptWithSeal(targetListing, agentKeypair, rawBytes, receiptId);
     emitLog({ phase: 'DECRYPT', status: 'seal_success', chars: content.length });
-  } catch {
+  } catch (err) {
+    console.error(`[DECRYPT DEBUG] Seal decryption failed!`);
+    console.error(`[DECRYPT DEBUG] Error name:`, err instanceof Error ? err.name : 'Unknown');
+    console.error(`[DECRYPT DEBUG] Error message:`, err instanceof Error ? err.message : String(err));
+    console.error(`[DECRYPT DEBUG] Error stack:`, err instanceof Error ? err.stack : 'No stack');
+    console.error(`[DECRYPT DEBUG] Full error object:`, err);
+    console.error(`[DECRYPT DEBUG] Listing ID:`, targetListing.id);
+    console.error(`[DECRYPT DEBUG] Receipt ID:`, receiptId);
+    console.error(`[DECRYPT DEBUG] Seal Policy ID:`, targetListing.sealPolicyId);
+    console.error(`[DECRYPT DEBUG] Raw bytes length:`, rawBytes.length);
+    console.error(`[DECRYPT DEBUG] Raw bytes sample (first 100):`, Buffer.from(rawBytes.slice(0, 100)).toString('hex'));
+    
     content = Buffer.from(rawBytes).toString('utf-8');
-    emitLog({ phase: 'DECRYPT', status: 'plaintext_fallback', chars: content.length });
+    emitLog({ phase: 'DECRYPT', status: 'plaintext_fallback', chars: content.length, error: String(err) });
   }
 
   // Phase 6: synthesize

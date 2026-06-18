@@ -11,13 +11,43 @@ import { env } from '../config/env.ts';
  * @returns The initialized SessionKey.
  */
 export async function createSessionKey(address: string, signer: Keypair): Promise<SessionKey> {
-  return await SessionKey.create({
-    address,
-    packageId: env.SEAL_PACKAGE_ID,
-    ttlMin: 15,
-    signer,
-    suiClient,
-  });
+  // Verify address matches the keypair
+  const derivedAddress = signer.getPublicKey().toSuiAddress();
+  console.log(`[SessionKey] Creating session key...`);
+  console.log(`[SessionKey] Requested address: ${address}`);
+  console.log(`[SessionKey] Derived from keypair: ${derivedAddress}`);
+  console.log(`[SessionKey] Addresses match: ${address === derivedAddress ? '✅ YES' : '❌ NO - THIS IS THE PROBLEM!'}`);
+  console.log(`[SessionKey] Keypair type: ${signer.constructor.name}`);
+  console.log(`[SessionKey] Package ID: ${env.SEAL_PACKAGE_ID}`);
+  console.log(`[SessionKey] SuiClient network: testnet`);
+  
+  if (address !== derivedAddress) {
+    throw new Error(`Address mismatch: requested ${address} but keypair derives to ${derivedAddress}`);
+  }
+  
+  try {
+    const sessionKey = await SessionKey.create({
+      address,
+      packageId: env.SEAL_PACKAGE_ID,
+      ttlMin: 15,
+      signer,
+      suiClient,
+    });
+    
+    // STEP 1: Log the personal message that will be signed
+    const personalMessage = sessionKey.getPersonalMessage();
+    const personalMessageStr = new TextDecoder().decode(personalMessage);
+    console.log(`[SessionKey] Personal message that was signed:`);
+    console.log(`[SessionKey] "${personalMessageStr}"`);
+    console.log(`[SessionKey] Personal message length: ${personalMessage.length} bytes`);
+    console.log(`[SessionKey] Personal message hex (first 100 bytes):`, Buffer.from(personalMessage.slice(0, 100)).toString('hex'));
+    
+    console.log(`[SessionKey] ✅ Session key created successfully`);
+    return sessionKey;
+  } catch (err) {
+    console.error(`[SessionKey] ❌ SessionKey.create() failed:`, err);
+    throw err;
+  }
 }
 
 /**
@@ -58,5 +88,7 @@ export async function buildApprovalTransaction(
   // and the dry-run will fail if the sender isn't the owner.
   tx.setSender(buyerAddress);
 
-  return await tx.build({ client: suiClient });
+  // CRITICAL: Seal requires onlyTransactionKind: true
+  // This returns only the PTB logic without gas/sender envelope
+  return await tx.build({ client: suiClient, onlyTransactionKind: true });
 }
