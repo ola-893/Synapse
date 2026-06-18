@@ -18,7 +18,7 @@ export async function createSessionKey(address: string, signer: Keypair): Promis
   console.log(`[SessionKey] Derived from keypair: ${derivedAddress}`);
   console.log(`[SessionKey] Addresses match: ${address === derivedAddress ? '✅ YES' : '❌ NO - THIS IS THE PROBLEM!'}`);
   console.log(`[SessionKey] Keypair type: ${signer.constructor.name}`);
-  console.log(`[SessionKey] Package ID: ${env.SEAL_PACKAGE_ID}`);
+  console.log(`[SessionKey] Package ID: ${env.SYNAPSE_PACKAGE_ID} (SYNAPSE - matches PTB)`);
   console.log(`[SessionKey] SuiClient network: testnet`);
   
   if (address !== derivedAddress) {
@@ -26,9 +26,12 @@ export async function createSessionKey(address: string, signer: Keypair): Promis
   }
   
   try {
+    // FIX: Use SYNAPSE_PACKAGE_ID to match the package called in buildApprovalTransaction()
+    // The Seal key server reconstructs the personal message from the PTB's package ID,
+    // so SessionKey must sign with the SAME package ID that's in the PTB moveCall target.
     const sessionKey = await SessionKey.create({
       address,
-      packageId: env.SEAL_PACKAGE_ID,
+      packageId: env.SYNAPSE_PACKAGE_ID,  // Changed from SEAL_PACKAGE_ID
       ttlMin: 15,
       signer,
       suiClient,

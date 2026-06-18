@@ -1,4 +1,10 @@
 #!/usr/bin/env tsx
+/**
+ * ⚠️ DEPRECATED - DO NOT USE
+ * This script encrypts with SEAL_PACKAGE_ID which does not have the marketplace module.
+ * Use seed_corrected_listing.ts instead, which encrypts with SYNAPSE_PACKAGE_ID.
+ * Kept for historical reference only.
+ */
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { uploadToWalrus } from '../walrus/upload.ts';
 import { listDataset } from '../marketplace/seller.ts';

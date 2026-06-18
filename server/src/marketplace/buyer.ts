@@ -59,11 +59,24 @@ export async function purchaseDatasetWithReceipt(
   console.log(`[Buyer] Purchased dataset ${listing.id}. TX: ${digest}`);
 
   // Find the PurchaseReceipt ID in the created objects
-  const createdObjects = res.effects?.created || [];
-  const receiptRef = createdObjects.find((c: any) => c.owner?.AddressOwner === agentAddress);
-  if (!receiptRef) throw new Error("Purchase receipt not found in tx effects");
+  // Need to fetch objectChanges to get the type information
+  const txDetails = await suiClient.getTransactionBlock({
+    digest,
+    options: { showObjectChanges: true }
+  });
   
-  return { receiptId: receiptRef.reference.objectId, txDigest: digest };
+  const receiptChange = txDetails.objectChanges?.find(
+    (change: any) => 
+      change.type === 'created' && 
+      change.objectType?.includes('::marketplace::PurchaseReceipt') &&
+      change.owner?.AddressOwner === agentAddress
+  ) as any;
+  
+  if (!receiptChange) {
+    throw new Error("Purchase receipt not found in tx object changes");
+  }
+  
+  return { receiptId: receiptChange.objectId, txDigest: digest };
 }
 
 export async function purchaseDataset(listing: DatasetListing, agentKeypair: Ed25519Keypair): Promise<string> {
