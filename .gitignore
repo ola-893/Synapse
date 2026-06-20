@@ -40,3 +40,6 @@ coverage/
 # Misc
 *.tgz
 .cache/
+
+# Local Netlify folder
+.netlify

@@ -62,8 +62,9 @@ export async function synapseBuyMarketplace(id: string): Promise<{ receiptId: st
   return api.purchaseDataset(id);
 }
 
-export async function synapseGetWalletPseudo(): Promise<SynapseWallet> {
-  const status = await api.agentStatus();
+export async function synapseGetWalletPseudo(ownerAddress: string = ''): Promise<SynapseWallet> {
+  if (!ownerAddress) throw new Error('ownerAddress required');
+  const status = await api.agentStatus(ownerAddress);
 
   return {
     address: status.agentAddress ?? 'Not registered',
@@ -76,21 +77,23 @@ export async function synapseGetWalletPseudo(): Promise<SynapseWallet> {
   };
 }
 
-export async function synapseToggleLoop(toggle: boolean): Promise<SynapseWallet> {
+export async function synapseToggleLoop(toggle: boolean, ownerAddress: string = ''): Promise<SynapseWallet> {
+  if (!ownerAddress) throw new Error('ownerAddress required');
   if (toggle) {
-    await api.startAgent();
+    await api.startAgent(ownerAddress);
   } else {
-    await api.stopAgent();
+    await api.stopAgent(ownerAddress);
   }
-  return synapseGetWalletPseudo();
+  return synapseGetWalletPseudo(ownerAddress);
 }
 
-export async function synapseCommitProfile(_interests: string, _maxBudgetPurchase: number): Promise<SynapseWallet> {
-  return synapseGetWalletPseudo();
+export async function synapseCommitProfile(_interests: string, _maxBudgetPurchase: number, ownerAddress: string = ''): Promise<SynapseWallet> {
+  return synapseGetWalletPseudo(ownerAddress);
 }
 
-export async function synapseFetchAgentLogs(): Promise<SynapseAgentLog[]> {
-  const status = await api.agentStatus();
+export async function synapseFetchAgentLogs(ownerAddress: string = ''): Promise<SynapseAgentLog[]> {
+  if (!ownerAddress) throw new Error('ownerAddress required');
+  const status = await api.agentStatus(ownerAddress);
   const health = status.isRunning ? 'Agent runtime is running.' : 'Agent runtime is stopped.';
 
   return [
@@ -104,11 +107,13 @@ export async function synapseFetchAgentLogs(): Promise<SynapseAgentLog[]> {
   ];
 }
 
-export async function synapseStartAgent() {
-  await api.startAgent();
+export async function synapseStartAgent(ownerAddress: string = '') {
+  if (!ownerAddress) throw new Error('ownerAddress required');
+  await api.startAgent(ownerAddress);
 }
 
-export async function synapseStopAgent() {
-  await api.stopAgent();
+export async function synapseStopAgent(ownerAddress: string = '') {
+  if (!ownerAddress) throw new Error('ownerAddress required');
+  await api.stopAgent(ownerAddress);
 }
 
