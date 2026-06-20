@@ -79,11 +79,14 @@ marketplaceRouter.get('/listings/:id', async (req, res) => {
 // Buyer Routes
 marketplaceRouter.post('/purchase/:id', async (req, res) => {
   try {
+    const { ownerAddress } = req.body;
+    if (!ownerAddress) return res.status(400).json({ error: 'ownerAddress is required' });
+
     const listing = await getListingById(req.params.id);
     if (!listing) return res.status(404).json({ error: 'Listing not found' });
     
     const { getActiveAgentKeypair } = await import('../agents/runtime.ts');
-    const agentKeypair = await getActiveAgentKeypair();
+    const agentKeypair = await getActiveAgentKeypair(ownerAddress);
     if (!agentKeypair) return res.status(400).json({ error: 'No active agent registered.' });
 
     const receiptId = await purchaseDataset(listing, agentKeypair);
@@ -97,14 +100,15 @@ marketplaceRouter.post('/purchase/:id', async (req, res) => {
 // This is an example of an endpoint that a third party might call to trigger the agent to ingest
 marketplaceRouter.post('/ingest/:id', requireX402Payment(), async (req, res) => {
   try {
-    const { receiptId } = req.body;
+    const { receiptId, ownerAddress } = req.body;
     if (!receiptId) return res.status(400).json({ error: 'Missing receiptId' });
+    if (!ownerAddress) return res.status(400).json({ error: 'ownerAddress is required' });
 
     const listing = await getListingById(req.params.id);
     if (!listing) return res.status(404).json({ error: 'Listing not found' });
 
     const { getActiveAgentKeypair } = await import('../agents/runtime.ts');
-    const agentKeypair = await getActiveAgentKeypair();
+    const agentKeypair = await getActiveAgentKeypair(ownerAddress);
     if (!agentKeypair) return res.status(400).json({ error: 'No active agent registered.' });
 
     await ingestDataset(listing, receiptId, agentKeypair);
@@ -117,11 +121,12 @@ marketplaceRouter.post('/ingest/:id', requireX402Payment(), async (req, res) => 
 // Protected Query Route (requires x402 payment proof)
 marketplaceRouter.post('/query', requireX402Payment(1000000), async (req, res) => {
   try {
-    const { query } = req.body;
+    const { query, ownerAddress } = req.body;
     if (!query) return res.status(400).json({ error: 'Missing query' });
+    if (!ownerAddress) return res.status(400).json({ error: 'ownerAddress is required' });
 
     const { getActiveAgentKeypair } = await import('../agents/runtime.ts');
-    const agentKeypair = await getActiveAgentKeypair();
+    const agentKeypair = await getActiveAgentKeypair(ownerAddress);
     if (!agentKeypair) return res.status(400).json({ error: 'No active agent registered.' });
     
     const agentAddress = agentKeypair.getPublicKey().toSuiAddress();

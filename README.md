@@ -62,11 +62,13 @@ The marketplace feeds the memory system. Here's how agents acquire new knowledge
 - Earns SUI when agents purchase access
 
 **Journey B: Agent Owner**
-- Registers an agent identity
-- Receives dedicated command wallet (autonomous agent control)
-- Funds wallet with SUI for autonomous operations
+- Connects Sui wallet to register an agent identity
+- Each connected wallet gets its own independent agent with a dedicated command wallet
+- Funds agent wallet with SUI for autonomous operations
 - Sets agent goals and budget constraints
 - Monitors memory growth and purchase history
+
+**Agent isolation guarantee:** Each connected wallet registers and controls its own independent agent. Agents are fully isolated per owner—no visitor can see or control another wallet's agent. Multiple users can run autonomous agents simultaneously without interference.
 
 **Journey C: Autonomous Agent Loop**
 The agent operates on a continuous learning cycle:

@@ -61,15 +61,72 @@ function shortId(value?: string) {
   return value.length > 18 ? `${value.slice(0, 8)}...${value.slice(-6)}` : value;
 }
 
-function formatAgentLog(log: AgentLogEntry) {
+function getSuiScanUrl(txDigestOrAddress: string, type: 'tx' | 'object' | 'account' = 'tx', network: string = 'testnet') {
+  return `https://suiscan.xyz/${network}/${type}/${txDigestOrAddress}`;
+}
+
+function getWalrusScanUrl(blobId: string, network: string = 'testnet') {
+  return `https://walruscan.com/${network}/blob/${blobId}`;
+}
+
+function formatAgentLog(log: AgentLogEntry): string | JSX.Element {
   if (log.phase === 'REMEMBER' && log.status === 'confirmed') {
-    return `MEMORY STORED blob_id=${shortId(log.blobId)} namespace=${log.namespace || '-'}`;
+    return (
+      <span>
+        MEMORY STORED{' '}
+        {log.blobId && (
+          <>
+            blob_id=
+            <a
+              href={getWalrusScanUrl(log.blobId)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[#00ff88] hover:text-[#00cc6a] underline font-mono"
+              title="View blob on Walrus"
+            >
+              {log.blobId}
+            </a>
+          </>
+        )}
+        {' '}namespace={log.namespace || '-'}
+      </span>
+    );
   }
   if (log.phase === 'EVALUATE') {
     return `${log.decision || 'CHECK'} ${log.listing || ''} - ${log.reason || log.status || ''}`;
   }
+  if (log.phase === 'PURCHASE' && log.txDigest) {
+    return (
+      <span>
+        {log.status || 'pending'}{' '}
+        <a
+          href={getSuiScanUrl(log.txDigest, 'tx')}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[#00e5ff] hover:text-[#00b8cc] underline font-mono"
+          title="View transaction on SuiScan"
+        >
+          tx={log.txDigest}
+        </a>
+        {log.receiptId && (
+          <>
+            {' '}receipt=
+            <a
+              href={getSuiScanUrl(log.receiptId, 'object')}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[#ffd700] hover:text-[#ccaa00] underline font-mono"
+              title="View receipt object on SuiScan"
+            >
+              {log.receiptId}
+            </a>
+          </>
+        )}
+      </span>
+    );
+  }
   if (log.phase === 'PURCHASE') {
-    return `${log.status || 'pending'} ${log.txDigest ? `tx=${shortId(log.txDigest)}` : log.listing || ''}`;
+    return `${log.status || 'pending'} ${log.listing || ''}`;
   }
   if (log.phase === 'SYNTHESIZE') {
     return typeof log.preview === 'string' ? log.preview : log.status || 'synthesizing';
@@ -78,7 +135,24 @@ function formatAgentLog(log: AgentLogEntry) {
     return `${log.status || 'recall'} count=${log.count ?? 0}`;
   }
   if (log.phase === 'DOWNLOAD') {
-    return `${log.status || 'downloading'} ${log.bytes ? `${log.bytes} bytes` : shortId(log.blobId)}`;
+    if (log.blobId) {
+      return (
+        <span>
+          {log.status || 'downloading'}{' '}
+          {log.bytes && `${log.bytes} bytes `}
+          <a
+            href={getWalrusScanUrl(log.blobId)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[#4DA2FF] hover:text-[#3d82cc] underline font-mono"
+            title="View blob on Walrus"
+          >
+            blob={log.blobId}
+          </a>
+        </span>
+      );
+    }
+    return `${log.status || 'downloading'} ${log.bytes ? `${log.bytes} bytes` : ''}`;
   }
   if (log.phase === 'DECRYPT') {
     return `${log.status || 'decrypting'} ${log.chars ? `${log.chars} chars` : ''}`;
@@ -103,10 +177,28 @@ export default function AgentWallet({ wallet }: AgentWalletProps) {
   const queryClient = useQueryClient();
   const suiClient = useSuiClient();
 
+  const currentOwnerAddress = account?.address || wallet.address;
+
   const health = useQuery({ queryKey: ['health'], queryFn: api.health, refetchInterval: 5000 });
-  const status = useQuery({ queryKey: ['agent-status'], queryFn: api.agentStatus, refetchInterval: 5000 });
-  const agentLogs = useQuery({ queryKey: ['agent-logs'], queryFn: api.agentLogs, refetchInterval: 3000 });
+  const status = useQuery({ 
+    queryKey: ['agent-status', currentOwnerAddress], 
+    queryFn: () => api.agentStatus(currentOwnerAddress), 
+    refetchInterval: 5000,
+    enabled: Boolean(currentOwnerAddress),
+  });
+  const agentLogs = useQuery({ 
+    queryKey: ['agent-logs', currentOwnerAddress], 
+    queryFn: () => api.agentLogs(currentOwnerAddress), 
+    refetchInterval: 3000,
+    enabled: Boolean(currentOwnerAddress),
+  });
   const memoryHealth = useQuery({ queryKey: ['memory-health'], queryFn: api.memoryHealth, refetchInterval: 15000 });
+  const memoryCount = useQuery({
+    queryKey: ['memory-count', status.data?.agentAddress],
+    queryFn: () => api.memoryCount(status.data!.agentAddress!),
+    enabled: Boolean(status.data?.agentAddress),
+    refetchInterval: 10000,
+  });
   const listings = useQuery({ queryKey: ['marketplace-listings'], queryFn: api.listings, refetchInterval: 15000 });
   const vault = useQuery({ queryKey: ['seal-vault'], queryFn: api.sealVault, refetchInterval: 15000 });
 
@@ -116,7 +208,7 @@ export default function AgentWallet({ wallet }: AgentWalletProps) {
   const backendStatusLoading = status.isLoading;
   const activeListings = listings.data?.listings.filter((l) => l.isActive) ?? [];
   const memoryLogEntries = agentLogs.data?.logs ?? [];
-  const storedMemoryCount = memoryLogEntries.filter((log) => log.phase === 'REMEMBER' && log.status === 'confirmed').length;
+  const storedMemoryCount = memoryCount.data?.count ?? 0; // Use actual MemWal count instead of log count
   const latestRemember = [...memoryLogEntries].reverse().find((log) => log.phase === 'REMEMBER' && log.status === 'confirmed');
 
   // ─── Chain balance (real on-chain data) ─────────────────────
@@ -129,13 +221,13 @@ export default function AgentWallet({ wallet }: AgentWalletProps) {
 
   // ─── Mutations ──────────────────────────────────────────────
   const start = useMutation({
-    mutationFn: api.startAgent,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agent-status'] }),
+    mutationFn: () => api.startAgent(currentOwnerAddress),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agent-status', currentOwnerAddress] }),
   });
 
   const stop = useMutation({
-    mutationFn: api.stopAgent,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agent-status'] }),
+    mutationFn: () => api.stopAgent(currentOwnerAddress),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agent-status', currentOwnerAddress] }),
   });
 
   const recallMemory = useMutation({
@@ -155,9 +247,9 @@ export default function AgentWallet({ wallet }: AgentWalletProps) {
   });
 
   const initBackendWallet = useMutation({
-    mutationFn: () => api.registerAgent(account?.address ?? wallet.address),
+    mutationFn: () => api.registerAgent(currentOwnerAddress),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['agent-status'] });
+      await queryClient.invalidateQueries({ queryKey: ['agent-status', currentOwnerAddress] });
     },
     onError: (error) => console.error('Failed to register agent:', error),
   });

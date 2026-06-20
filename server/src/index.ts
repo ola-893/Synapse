@@ -12,7 +12,7 @@ import { syncListingsFromChain } from './marketplace/discovery.ts';
 
 const app = express();
 
-app.use(cors());
+app.use(cors({ origin: '*' })); // Allow all origins for demo/testing
 app.use(express.json({ limit: '50mb' }));
 
 // Health check
@@ -51,12 +51,9 @@ async function bootstrap() {
     console.warn('[startup] Chain sync failed (non-fatal):', err.message || err)
   );
 
-  // 3. Optionally auto-start the agent loop
+  // 3. Optionally auto-start the agent loop (disabled - requires ownerAddress per agent)
   if (env.AUTO_START) {
-    console.log('[startup] AUTO_START=true, starting agent loop...');
-    await startAgentLoop().catch((err) => {
-      console.warn('[startup] AUTO_START skipped:', err.message || err);
-    });
+    console.log('[startup] AUTO_START is set, but multi-owner runtime requires explicit per-owner start via API');
   }
 
   // 4. Start the HTTP server

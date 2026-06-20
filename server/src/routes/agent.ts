@@ -19,19 +19,15 @@ agentRouter.post('/register', async (req, res) => {
 
 agentRouter.get('/wallet', async (req, res) => {
   const ownerAddress = req.query.ownerAddress as string | undefined;
-  if (ownerAddress) {
-    const wallet = await getAgentWallet(ownerAddress);
-    if (!wallet) {
-      return res.status(404).json({ error: 'No agent wallet found. Register first.' });
-    }
-    return res.json({ publicKey: wallet.agentAddress, agentAddress: wallet.agentAddress, ownerAddress });
+  if (!ownerAddress) {
+    return res.status(400).json({ error: 'ownerAddress query parameter is required' });
   }
-
-  const status = await getAgentStatus();
-  if (!status.isRegistered) {
+  
+  const wallet = await getAgentWallet(ownerAddress);
+  if (!wallet) {
     return res.status(404).json({ error: 'No agent wallet found. Register first.' });
   }
-  res.json({ publicKey: status.agentAddress });
+  return res.json({ publicKey: wallet.agentAddress, agentAddress: wallet.agentAddress, ownerAddress });
 });
 
 agentRouter.post('/start', async (req, res) => {
@@ -45,7 +41,11 @@ agentRouter.post('/start', async (req, res) => {
 
 agentRouter.post('/stop', (req, res) => {
   try {
-    stopAgentLoop();
+    const ownerAddress = req.body?.ownerAddress || req.body?.ownerPublicKey;
+    if (!ownerAddress) {
+      return res.status(400).json({ error: 'ownerAddress is required' });
+    }
+    stopAgentLoop(ownerAddress);
     res.json({ message: 'Agent stopped' });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -53,11 +53,19 @@ agentRouter.post('/stop', (req, res) => {
 });
 
 agentRouter.get('/status', async (req, res) => {
-  res.json(await getAgentStatus());
+  const ownerAddress = req.query.ownerAddress as string | undefined;
+  if (!ownerAddress) {
+    return res.status(400).json({ error: 'ownerAddress query parameter is required' });
+  }
+  res.json(await getAgentStatus(ownerAddress));
 });
 
-agentRouter.get('/logs', (_req, res) => {
-  res.json({ logs: getAgentLogs() });
+agentRouter.get('/logs', (req, res) => {
+  const ownerAddress = req.query.ownerAddress as string | undefined;
+  if (!ownerAddress) {
+    return res.status(400).json({ error: 'ownerAddress query parameter is required' });
+  }
+  res.json({ logs: getAgentLogs(ownerAddress) });
 });
 
 agentRouter.get('/purchases', async (req, res) => {

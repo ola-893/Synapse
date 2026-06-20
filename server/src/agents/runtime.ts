@@ -10,36 +10,41 @@ import { sealDecrypt } from '../seal/decrypt.ts';
 import { createSessionKey, buildApprovalTransaction } from '../seal/session.ts';
 import { env } from '../config/env.ts';
 
-let activeTask: cron.ScheduledTask | null = null;
-let lastTickTime: Date | null = null;
-let isRunning = false;
-let isTickInProgress = false;
-let tickCount = 0;
+// Per-owner runtime state
+interface OwnerRuntimeState {
+  task: cron.ScheduledTask;
+  lastTickTime: Date | null;
+  isTickInProgress: boolean;
+  tickCount: number;
+  logBuffer: Array<AgentLogEvent & { timestamp: string }>;
+}
 
-// The active owner connected via the dashboard
-let activeOwnerAddress: string | null = null;
+const activeOwners = new Map<string, OwnerRuntimeState>();
 
 import { initializeKeypair } from '../config/sui.ts';
 
 const MAX_LOG_EVENTS = 100;
-const logBuffer: Array<AgentLogEvent & { timestamp: string }> = [];
 
-function createEmitter(): (event: AgentLogEvent) => void {
+function createEmitter(ownerAddress: string): (event: AgentLogEvent) => void {
   return (event: AgentLogEvent) => {
+    const state = activeOwners.get(ownerAddress);
+    if (!state) return;
+    
     const entry = { ...event, timestamp: new Date().toISOString() };
-    logBuffer.push(entry);
-    if (logBuffer.length > MAX_LOG_EVENTS) logBuffer.shift();
-    console.log(`[Agent] ${event.phase}:`, JSON.stringify(event));
+    state.logBuffer.push(entry);
+    if (state.logBuffer.length > MAX_LOG_EVENTS) state.logBuffer.shift();
+    console.log(`[Agent ${ownerAddress.slice(0, 8)}] ${event.phase}:`, JSON.stringify(event));
   };
 }
 
-export function getAgentLogs(): Array<AgentLogEvent & { timestamp: string }> {
-  return [...logBuffer];
+export function getAgentLogs(ownerAddress: string): Array<AgentLogEvent & { timestamp: string }> {
+  const state = activeOwners.get(ownerAddress);
+  return state ? [...state.logBuffer] : [];
 }
 
-export async function getActiveAgentKeypair(): Promise<Ed25519Keypair | null> {
-  if (!activeOwnerAddress) return null;
-  const wallet = await getAgentWallet(activeOwnerAddress);
+export async function getActiveAgentKeypair(ownerAddress: string): Promise<Ed25519Keypair | null> {
+  if (!ownerAddress) return null;
+  const wallet = await getAgentWallet(ownerAddress);
   if (!wallet) return null;
   // Use initializeKeypair to properly parse the bech32 key string
   return initializeKeypair(wallet.privateKeyStr);
@@ -57,30 +62,31 @@ async function decryptWithSeal(
   return sealDecrypt(rawBytes, sessionKey, txBytes);
 }
 
-async function runActiveAgentTick() {
-  if (isTickInProgress) {
-    createEmitter()({ phase: 'TICK_COMPLETE', result: 'skipped', reason: 'Previous tick still in progress' });
+async function runAgentTick(ownerAddress: string) {
+  const state = activeOwners.get(ownerAddress);
+  if (!state) return;
+
+  if (state.isTickInProgress) {
+    createEmitter(ownerAddress)({ phase: 'TICK_COMPLETE', result: 'skipped', reason: 'Previous tick still in progress' });
     return;
   }
 
-  isTickInProgress = true;
-  tickCount++;
-  console.log(`\n--- [Agent Tick #${tickCount}] Waking up at ${new Date().toISOString()} ---`);
-  lastTickTime = new Date();
+  state.isTickInProgress = true;
+  state.tickCount++;
+  console.log(`\n--- [Agent Tick #${state.tickCount} for ${ownerAddress.slice(0, 8)}] Waking up at ${new Date().toISOString()} ---`);
+  state.lastTickTime = new Date();
 
   try {
-    if (!activeOwnerAddress) throw new Error('No active owner set for the runtime.');
-
-    const walletData = await getAgentWallet(activeOwnerAddress);
+    const walletData = await getAgentWallet(ownerAddress);
     if (!walletData) throw new Error('Agent wallet not found in database for owner');
 
     const agentKeypair = initializeKeypair(walletData.privateKeyStr);
-    await executeAgentTick(walletData.agentAddress, agentKeypair, createEmitter());
+    await executeAgentTick(walletData.agentAddress, agentKeypair, createEmitter(ownerAddress));
   } catch (error) {
-    console.error('[Agent] Error during tick:', error);
-    createEmitter()({ phase: 'TICK_COMPLETE', result: 'error', error: String(error) });
+    console.error(`[Agent ${ownerAddress.slice(0, 8)}] Error during tick:`, error);
+    createEmitter(ownerAddress)({ phase: 'TICK_COMPLETE', result: 'error', error: String(error) });
   } finally {
-    isTickInProgress = false;
+    state.isTickInProgress = false;
   }
 }
 
@@ -293,7 +299,6 @@ export async function registerAgent(config: { ownerPublicKey: string }): Promise
   
   if (existingWallet) {
     console.log(`[Agent] Found existing wallet for owner: ${config.ownerPublicKey}`);
-    activeOwnerAddress = config.ownerPublicKey;
     return { agentAddress: existingWallet.agentAddress };
   }
 
@@ -307,48 +312,77 @@ export async function registerAgent(config: { ownerPublicKey: string }): Promise
   // Encrypt and save to DB
   await saveAgentWallet(config.ownerPublicKey, agentAddress, privateKeyStr);
   
-  activeOwnerAddress = config.ownerPublicKey;
   return { agentAddress };
 }
 
-export async function startAgentLoop(ownerAddress?: string) {
-  if (ownerAddress) {
-    await registerAgent({ ownerPublicKey: ownerAddress });
+export async function startAgentLoop(ownerAddress: string) {
+  if (!ownerAddress) {
+    throw new Error('ownerAddress is required to start an agent loop.');
   }
-  if (!activeOwnerAddress) {
-    throw new Error('Register an agent before starting the autonomous loop.');
+
+  // Ensure agent is registered
+  await registerAgent({ ownerPublicKey: ownerAddress });
+
+  // Check if already running for this owner
+  if (activeOwners.has(ownerAddress)) {
+    console.log(`[Agent] Loop already running for owner: ${ownerAddress.slice(0, 8)}`);
+    return;
   }
-  if (isRunning) return;
-  console.log('Starting Synapse Agent Runtime (1-minute intervals)...');
+
+  console.log(`[Agent] Starting loop for owner: ${ownerAddress.slice(0, 8)} (1-minute intervals)...`);
   
-  // Run every minute
-  activeTask = cron.schedule('* * * * *', runActiveAgentTick);
-  isRunning = true;
+  // Create isolated state for this owner
+  const state: OwnerRuntimeState = {
+    task: cron.schedule('* * * * *', () => runAgentTick(ownerAddress)),
+    lastTickTime: null,
+    isTickInProgress: false,
+    tickCount: 0,
+    logBuffer: [],
+  };
+
+  activeOwners.set(ownerAddress, state);
   
   // Trigger first tick immediately
-  runActiveAgentTick();
+  runAgentTick(ownerAddress);
 }
 
-export function stopAgentLoop() {
-  if (!isRunning || !activeTask) return;
-  console.log('Stopping Synapse Agent Runtime...');
-  activeTask.stop();
-  isRunning = false;
-}
-
-export async function getAgentStatus() {
-  let agentAddress = null;
-  if (activeOwnerAddress) {
-    const wallet = await getAgentWallet(activeOwnerAddress);
-    if (wallet) agentAddress = wallet.agentAddress;
+export function stopAgentLoop(ownerAddress: string) {
+  if (!ownerAddress) {
+    throw new Error('ownerAddress is required to stop an agent loop.');
   }
 
+  const state = activeOwners.get(ownerAddress);
+  if (!state) {
+    console.log(`[Agent] No active loop found for owner: ${ownerAddress.slice(0, 8)}`);
+    return;
+  }
+
+  console.log(`[Agent] Stopping loop for owner: ${ownerAddress.slice(0, 8)}...`);
+  state.task.stop();
+  activeOwners.delete(ownerAddress);
+}
+
+export async function getAgentStatus(ownerAddress: string) {
+  if (!ownerAddress) {
+    return {
+      isRegistered: false,
+      isRunning: false,
+      agentAddress: null,
+      ownerAddress: null,
+      lastTickTime: null,
+      tickCount: 0,
+    };
+  }
+
+  const wallet = await getAgentWallet(ownerAddress);
+  const state = activeOwners.get(ownerAddress);
+
   return {
-    isRegistered: agentAddress !== null,
-    isRunning,
-    agentAddress,
-    ownerAddress: activeOwnerAddress,
-    lastTickTime,
-    tickCount
+    isRegistered: wallet !== null,
+    isRunning: state !== undefined,
+    agentAddress: wallet?.agentAddress || null,
+    ownerAddress,
+    lastTickTime: state?.lastTickTime || null,
+    tickCount: state?.tickCount || 0,
   };
 }

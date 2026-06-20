@@ -121,18 +121,22 @@ export const api = {
       headers: digest ? { 'x-sui-payment-digest': digest } : undefined,
     }),
 
-  agentStatus: () => request<AgentStatus>('/api/agent/status'),
-  startAgent: (ownerAddress?: string) => request<{ message: string }>('/api/agent/start', {
+  agentStatus: (ownerAddress: string) => request<AgentStatus>(`/api/agent/status?ownerAddress=${encodeURIComponent(ownerAddress)}`),
+  startAgent: (ownerAddress: string) => request<{ message: string }>('/api/agent/start', {
     method: 'POST',
-    body: ownerAddress ? JSON.stringify({ ownerAddress }) : undefined,
+    body: JSON.stringify({ ownerAddress }),
   }),
-  stopAgent: () => request<{ message: string }>('/api/agent/stop', { method: 'POST' }),
-  agentLogs: () => request<{ logs: AgentLogEntry[] }>('/api/agent/logs'),
+  stopAgent: (ownerAddress: string) => request<{ message: string }>('/api/agent/stop', { 
+    method: 'POST',
+    body: JSON.stringify({ ownerAddress }),
+  }),
+  agentLogs: (ownerAddress: string) => request<{ logs: AgentLogEntry[] }>(`/api/agent/logs?ownerAddress=${encodeURIComponent(ownerAddress)}`),
   registerAgent: (ownerPublicKey: string) => 
     request<{ message: string; agentAddress: string }>('/api/agent/register', { 
       method: 'POST', body: JSON.stringify({ ownerPublicKey }) 
     }),
-  getAgentWallet: () => request<{ publicKey: string }>('/api/agent/wallet'),
+  getAgentWallet: (ownerAddress: string) => request<{ publicKey: string; agentAddress: string; ownerAddress: string }>(`/api/agent/wallet?ownerAddress=${encodeURIComponent(ownerAddress)}`),
+  getAgentPurchases: (ownerAddress: string) => request<{ purchases: unknown[] }>(`/api/agent/purchases?ownerAddress=${encodeURIComponent(ownerAddress)}`),
 
   remember: (text: string, secure: boolean) =>
     request<{ message: string; job?: unknown; blobId?: string }>('/api/memory/remember', {
@@ -145,6 +149,10 @@ export const api = {
       body: JSON.stringify({ query, agentAddress }),
     }),
   memoryHealth: () => request<{ status: string; relayer?: unknown; message?: string; error?: string }>('/api/memory/health'),
+  memoryCount: (agentAddress: string) =>
+    request<{ count: number; namespace: string; status?: string }>(
+      `/api/memory/count?agentAddress=${encodeURIComponent(agentAddress)}`
+    ),
   recallMemory: (query: string, agentAddress: string, limit = 5) =>
     request<MemoryRecallResult>(
       `/api/memory/recall?query=${encodeURIComponent(query)}&agentAddress=${encodeURIComponent(agentAddress)}&limit=${limit}`
