@@ -11,9 +11,14 @@ COPY package*.json ./
 # Install dependencies
 RUN npm install
 
-# Source code is bind-mounted at runtime for hot reload
+# Copy source code
+COPY . .
+
+# Create data directory for SQLite
+RUN mkdir -p /app/data
+
 # Expose port
 EXPOSE 3002
 
-# Command to run tsx in watch mode
-CMD ["npx", "tsx", "watch", "src/index.ts"]
+# Command to run the server
+CMD ["npx", "tsx", "src/index.ts"]
