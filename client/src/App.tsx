@@ -157,7 +157,7 @@ const AppShell = () => {
                 </span>
                 <span className="font-mono text-xs font-black text-[#111312]">
                   {account
-                    ? `${formatAddress(account.address)} — ${balanceQuery.data ? formatMist(balanceQuery.data.totalBalance) : '...'} `
+                    ? ` ${balanceQuery.data ? formatMist(balanceQuery.data.totalBalance) : '...'} `
                     :  ' '
                   }
                 </span>
@@ -213,7 +213,7 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <SuiClientProvider networks={networkConfig} defaultNetwork="testnet">
-        <WalletProvider autoConnect>
+        <WalletProvider autoConnect walletFilter={(wallet: any) => wallet.name === 'Slush'}>
           <ToastProvider>
             <AppShell />
           </ToastProvider>
