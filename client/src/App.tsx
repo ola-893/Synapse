@@ -3,7 +3,7 @@ import { createNetworkConfig, SuiClientProvider, WalletProvider, ConnectButton, 
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Compass, ShoppingBag, Terminal, Activity, LogOut, Eclipse, Wallet, CheckCircle2, Unplug } from 'lucide-react';
-import { formatAddress, formatMist } from './lib/sui';
+import { formatMist } from './lib/sui';
 import { ToastProvider } from './components/Toast';
 import LandingViewLegacy from './pages/LandingView';
 import MarketplaceFeedLegacy from './pages/MarketplaceFeed';
